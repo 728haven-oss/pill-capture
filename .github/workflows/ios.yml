@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - name: Build web (docs/)
+        env: { RC_ANDROID_KEY: "${{ secrets.RC_ANDROID_KEY }}", RC_IOS_KEY: "${{ secrets.RC_IOS_KEY }}" }
         run: pip3 install --break-system-packages pillow && python3 tools/build.py
       - name: Capacitor iOS project
         run: |
@@ -36,6 +37,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 알약을 촬영해 개수를 세기 위해 카메라를 사용합니다." $P || true
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 저장된 알약 사진·영상을 불러와 개수를 세기 위해 사진 보관함에 접근합니다." $P || true
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string 촬영한 사진을 저장하기 위해 사용합니다." $P || true
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" $P || true
           # 앱 아이콘 1024
           cp assets/icons/icon-1024.png ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
           python3 -c "from PIL import Image; im=Image.open('ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png'); assert im.size==(1024,1024), im.size; print('icon OK', im.size)"
