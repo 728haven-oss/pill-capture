@@ -1,0 +1,648 @@
+<title>알약캡쳐</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#F3F6F4; --surface:#FFFFFF; --surface-2:#E9EFEC; --line:#D3DCD7;
+  --ink:#16241D; --ink-2:#4A5A52; --ink-3:#7E8C85;
+  --accent:#0E8A74; --accent-ink:#FFFFFF; --accent-soft:#D6EFE9;
+  --warn:#B4761B; --warn-soft:#F7E9D2; --bad:#B4402F;
+  --shadow:0 1px 2px rgba(22,36,29,.06),0 6px 20px rgba(22,36,29,.07);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1512; --surface:#171F1B; --surface-2:#1F2925; --line:#2C3833;
+    --ink:#EAF1ED; --ink-2:#AEBBB4; --ink-3:#758079;
+    --accent:#3FBFA6; --accent-ink:#06211B; --accent-soft:#163F37;
+    --warn:#E0A64C; --warn-soft:#3A2D14; --bad:#E5705C;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1512; --surface:#171F1B; --surface-2:#1F2925; --line:#2C3833;
+  --ink:#EAF1ED; --ink-2:#AEBBB4; --ink-3:#758079;
+  --accent:#3FBFA6; --accent-ink:#06211B; --accent-soft:#163F37;
+  --warn:#E0A64C; --warn-soft:#3A2D14; --bad:#E5705C;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+.app{max-width:560px;margin:0 auto;padding-block:0 96px;padding-inline:16px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;justify-content:space-between;padding-block:14px 4px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+.brand .mark svg{width:18px;height:18px}
+.brand h1{font-size:17px;font-weight:600;margin:0;letter-spacing:-.01em}
+.brand small{display:block;font-size:11.5px;color:var(--ink-3);font-weight:500;letter-spacing:.02em}
+.mode{display:inline-flex;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px}
+.mode button{border:0;background:transparent;color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;cursor:pointer}
+.mode button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.mode button:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.stage{position:relative;background:var(--surface);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.stage .canvas-wrap{position:relative;width:100%;background:#0b0f0d;display:grid;place-items:center;min-height:200px}
+.stage canvas{display:block;max-width:100%;height:auto;width:100%}
+.stage #overlay{position:absolute;inset:0;width:100%;height:100%}
+.stage .status{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:999px;background:rgba(14,21,18,.72);color:#fff;letter-spacing:.01em;backdrop-filter:blur(4px)}
+.chip.busy::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#7fe3cf;margin-right:6px;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.chip.busy::before{animation:none}}
+.stage .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-top:1px solid var(--line)}
+.stage .toolbar label{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:8px;flex:1}
+.stage .toolbar input[type=range]{flex:1;accent-color:var(--accent);max-width:180px}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+
+.summary{display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px;padding:2px 4px}
+.summary .total{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:44px;font-weight:600;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.summary .total small{font-family:"IBM Plex Sans KR",sans-serif;font-size:14px;font-weight:500;color:var(--ink-2);letter-spacing:0;margin-left:6px}
+.summary .kinds{font-size:13px;color:var(--ink-2);text-align:right}
+.summary .kinds b{color:var(--ink);font-weight:600}
+.summary .hint{grid-column:1/-1;font-size:12.5px;color:var(--ink-3);margin-top:-4px}
+
+.groups{display:flex;flex-direction:column;gap:8px}
+.group{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;background:var(--surface);border-radius:14px;padding:10px 12px;box-shadow:var(--shadow);border:2px solid transparent;cursor:pointer;transition:border-color .15s}
+.group[aria-selected="true"]{border-color:var(--accent)}
+.group.merge-pick{border-color:var(--warn)}
+.group .sw{width:44px;height:44px;border-radius:12px;position:relative;border:1px solid rgba(0,0,0,.08);overflow:hidden;background:var(--surface-2)}
+.group .sw canvas{position:absolute;inset:0;width:100%;height:100%}
+.group .sw .tag{position:absolute;left:0;top:0;width:14px;height:14px;border-radius:0 0 6px 0}
+.group .meta{min-width:0}
+.group .meta .name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px}
+.group .meta .name .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.group .meta .desc{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.group .count{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;letter-spacing:-.02em}
+.group .count.adj{color:var(--warn)}
+.group .adjust{display:flex;flex-direction:column;gap:4px}
+.group .adjust button{width:30px;height:24px;border-radius:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font:inherit;font-weight:600;line-height:1;cursor:pointer}
+.group .adjust button:active{background:var(--accent-soft)}
+
+.merge-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:9px 12px;font-size:13px}
+.merge-bar b{color:var(--warn)}
+.merge-bar .actions{display:flex;gap:6px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:600;padding:7px 12px;border-radius:10px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+.empty{padding:26px 18px;text-align:center;color:var(--ink-2);font-size:14px}
+.empty b{color:var(--ink)}
+
+.dock{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--bg) 70%,transparent);padding:10px 16px 14px}
+.dock .row{max-width:560px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px}
+.dock .row.live{grid-template-columns:1fr 1fr}
+.dock button.stop{background:var(--bad);border-color:var(--bad);color:#fff}
+.live-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--accent-soft);color:var(--ink);border-radius:12px;padding:9px 12px;font-size:13px}
+.live-bar b{color:var(--accent)}
+.live-bar .rec{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:6px;animation:pulse 1s infinite}
+#live{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.dock button{height:50px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:14.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:var(--shadow)}
+.dock button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.dock button svg{width:19px;height:19px}
+.dock button.icon{width:50px;padding:0}
+.dock input[type=file]{display:none}
+
+.note{font-size:12px;color:var(--ink-3);padding:0 4px}
+.note b{color:var(--ink-2);font-weight:600}
+@media (max-width:400px){.summary .total{font-size:38px}.mode button{padding:5px 9px}}
+</style>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-40 12 12)"/><path d="M9.5 8.5l5 7" /></svg></div>
+      <div><h1>알약캡쳐</h1><small>사진·실시간 영상으로 종류별 개수 확인</small></div>
+    </div>
+    <div class="mode" role="group" aria-label="분석 모드">
+      <button id="mode-auto" aria-pressed="true">혼합</button>
+      <button id="mode-single" aria-pressed="false">한 종류</button>
+    </div>
+  </header>
+
+  <section class="stage" aria-label="분석 화면">
+    <div class="canvas-wrap">
+      <canvas id="photo" width="4" height="3"></canvas>
+      <canvas id="overlay"></canvas>
+      <div class="status"><span class="chip" id="chip-state">예시 이미지</span><span class="chip" id="chip-time" hidden></span></div>
+    </div>
+    <div class="toolbar">
+      <label for="sens"><span style="white-space:nowrap">분류 민감도</span>
+        <input type="range" id="sens" min="1" max="9" value="5" step="1" aria-label="분류 민감도">
+      </label>
+      <label class="toggle"><input type="checkbox" id="show-num" checked> 번호 표시</label>
+    </div>
+  </section>
+
+  <div class="live-bar" id="live-bar" hidden><span><span class="rec"></span><b>실시간 카운팅</b> · <span id="live-msg">알약이 잘 보이도록 카메라를 위에서 비추세요</span></span><span id="live-fps" style="color:var(--ink-3)"></span></div>
+
+  <div class="summary" id="summary">
+    <div class="total"><span id="total">0</span><small>정</small></div>
+    <div class="kinds"><b id="kinds">0</b>종류 인식</div>
+    <div class="hint" id="hint">종류 줄을 누르면 사진에서 강조됩니다. 잘못 나뉜 종류는 <b>합치기</b>로 하나로 묶을 수 있습니다.</div>
+  </div>
+
+  <div class="merge-bar" id="merge-bar" hidden>
+    <span><b>합치기</b> · <span id="merge-msg">합칠 종류를 두 개 이상 선택하세요</span></span>
+    <span class="actions"><button class="btn ghost" id="merge-cancel">취소</button><button class="btn primary" id="merge-apply" disabled>합치기</button></span>
+  </div>
+
+  <section class="groups" id="groups" aria-label="종류별 개수"></section>
+
+  <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+    <button class="btn" id="btn-merge">종류 합치기</button>
+    <button class="btn" id="btn-copy">결과 복사</button>
+  </div>
+
+  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
+</div>
+
+<div class="dock">
+  <div class="row" id="dock-row">
+    <button class="primary" id="btn-live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3z"/></svg>실시간</button>
+    <button id="btn-freeze" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg>이 장면 고정</button>
+    <button class="stop" id="btn-stop" hidden>종료</button>
+    <button id="btn-camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>촬영</button>
+    <button id="btn-file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>사진·영상</button>
+    <button class="icon" id="btn-sample" title="예시 이미지 다시 만들기" aria-label="예시 이미지"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></button>
+    <input type="file" id="file-camera" accept="image/*" capture="environment">
+    <input type="file" id="file-pick" accept="image/*,video/*">
+    <video id="live" playsinline muted autoplay></video>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+// ───────────────────────── 상태
+const $ = id => document.getElementById(id);
+const photo = $('photo'), overlay = $('overlay');
+const pctx = photo.getContext('2d', {willReadFrequently:true});
+const octx = overlay.getContext('2d');
+const PALETTE = ['#FF7A1A','#2E7BFF','#E0369A','#7ED321','#00C2D1','#FFD400','#9B51E0','#FF3B30','#34C759','#A26A2E'];
+let state = { pills:[], groups:[], mode:'auto', selected:-1, merging:false, mergePick:new Set(), source:null, adjust:{} };
+
+// ───────────────────────── 이미지 로드
+function loadFile(file){
+  if(!file) return;
+  if(file.type.startsWith('video/')){ startLive(file); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); setImage(img, '사진'); };
+  img.onerror = () => { URL.revokeObjectURL(url); setChip('이미지를 읽을 수 없습니다'); };
+  img.src = url;
+}
+function setImage(img, label){
+  const MAX = 900;
+  const s = Math.min(1, MAX / Math.max(img.naturalWidth||img.width, img.naturalHeight||img.height));
+  const w = Math.round((img.naturalWidth||img.width)*s), h = Math.round((img.naturalHeight||img.height)*s);
+  photo.width = w; photo.height = h; overlay.width = w; overlay.height = h;
+  pctx.drawImage(img, 0, 0, w, h);
+  state.source = label; state.adjust = {}; state.selected=-1; cancelMerge();
+  analyze();
+}
+
+// ───────────────────────── 핵심 분석
+function analyze(){
+  const t0 = performance.now();
+  setChip('분석 중…', true);
+  requestAnimationFrame(() => {
+    try{
+      const w = photo.width, h = photo.height;
+      const data = pctx.getImageData(0,0,w,h).data;
+      const pills = segment(data, w, h);
+      state.pills = pills;
+      state.groups = state.mode === 'single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
+      state.groups.sort((a,b)=>b.length-a.length);
+      state.adjust = {};
+      render();
+      const ms = Math.round(performance.now()-t0);
+      setChip(state.source || '사진'); $('chip-time').hidden=false; $('chip-time').textContent = `${w}×${h} · ${ms}ms`;
+    }catch(e){ console.error(e); setChip('분석 실패: '+e.message); }
+  });
+}
+
+// 배경 분리 → 연결요소 → 붙은 알약 분할 → 알약별 특징
+function segment(d, w, h){
+  const n = w*h;
+  // 1) 배경색: 가장자리 픽셀의 중앙값
+  const m = Math.max(4, Math.round(Math.min(w,h)*0.05));
+  const rs=[],gs=[],bs=[];
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    if(x<m||y<m||x>=w-m||y>=h-m){ const i=(y*w+x)*4; rs.push(d[i]);gs.push(d[i+1]);bs.push(d[i+2]); }
+  }
+  const med = a => { a.sort((p,q)=>p-q); return a[a.length>>1]; };
+  const br=med(rs), bg=med(gs), bb=med(bs);
+  // 2) 배경과의 거리 → Otsu 임계값
+  const dist = new Float32Array(n);
+  let maxd=0;
+  for(let i=0;i<n;i++){
+    const j=i*4, dr=d[j]-br, dg=d[j+1]-bg, db=d[j+2]-bb;
+    // 색상 차이에 가중(밝기만 다른 그림자에 덜 민감)
+    const lum = (dr+dg+db)/3;
+    const chroma = Math.sqrt(((dr-lum)**2+(dg-lum)**2+(db-lum)**2));
+    const v = Math.sqrt(lum*lum*0.55 + chroma*chroma*2.2);
+    dist[i]=v; if(v>maxd) maxd=v;
+  }
+  const hist = new Float64Array(256); const sc = 255/(maxd||1);
+  for(let i=0;i<n;i++) hist[Math.min(255, (dist[i]*sc)|0)]++;
+  let thr = otsu(hist, n)/sc;
+  thr = Math.max(thr, 18); // 너무 낮은 임계값 방지(균일 배경 노이즈)
+  let fg = new Uint8Array(n);
+  for(let i=0;i<n;i++) fg[i] = dist[i]>thr ? 1:0;
+  // 3) 형태학: 열기(노이즈 제거) 후 닫기(구멍 메움)
+  fg = dilate(erode(fg,w,h),w,h);
+  fg = erode(dilate(fg,w,h),w,h);
+  fillHoles(fg,w,h);
+  // 3b) 배경과 색이 비슷한 알약(흰 알약 + 흰 배경): 윤곽선(기울기) 기반 마스크를 합침
+  const edge = edgeMask(d, w, h);
+  for(let i=0;i<n;i++) if(edge[i]) fg[i]=1;
+  // 4) 연결요소
+  const label = new Int32Array(n); let nl=0; const comps=[];
+  const stack=[];
+  for(let i=0;i<n;i++){
+    if(!fg[i]||label[i]) continue;
+    nl++; const px=[]; stack.push(i); label[i]=nl;
+    while(stack.length){ const p=stack.pop(); px.push(p);
+      const x=p%w, y=(p-x)/w;
+      if(x>0&&fg[p-1]&&!label[p-1]){label[p-1]=nl;stack.push(p-1);}
+      if(x<w-1&&fg[p+1]&&!label[p+1]){label[p+1]=nl;stack.push(p+1);}
+      if(y>0&&fg[p-w]&&!label[p-w]){label[p-w]=nl;stack.push(p-w);}
+      if(y<h-1&&fg[p+w]&&!label[p+w]){label[p+w]=nl;stack.push(p+w);}
+    }
+    comps.push(px);
+  }
+  // 5) 크기 필터: 중앙값 기준 작은 잡티 제거, 가장자리에 잘린 것 제외 안 함(사용자 보정)
+  const areas = comps.map(c=>c.length).sort((a,b)=>a-b);
+  if(!areas.length) return [];
+  const minA = Math.max(30, n*0.00025);
+  const big = comps.filter(c=>c.length>=minA);
+  if(!big.length) return [];
+  // 기준 알약 면적: 큰 것들 중 하한 40% 분위(뭉친 덩어리 영향 줄임)
+  const a2 = big.map(c=>c.length).sort((a,b)=>a-b);
+  const refA = a2[Math.floor(a2.length*0.4)];
+  const refR = Math.sqrt(refA/Math.PI);
+  // 6) 붙은 알약 분할: 거리변환 봉우리
+  const pills=[];
+  const dt = new Float32Array(n);
+  for(const c of big){
+    if(c.length < refA*1.25){ pills.push(...features(c, d, w, refA)); continue; }
+    const parts = splitBlob(c, fg, w, h, dt, refR);
+    for(const p of parts) pills.push(...features(p, d, w, refA));
+  }
+  return pills;
+}
+function otsu(hist,total){
+  let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i];
+  let sumB=0,wB=0,max=0,thr=0;
+  for(let i=0;i<256;i++){ wB+=hist[i]; if(!wB) continue; const wF=total-wB; if(!wF) break;
+    sumB+=i*hist[i]; const mB=sumB/wB, mF=(sum-sumB)/wF; const v=wB*wF*(mB-mF)**2; if(v>max){max=v;thr=i;} }
+  return thr;
+}
+// 회색조 Sobel 기울기 → Otsu → 닫기 → 구멍 메우기 → 원래 두께로 복원
+function edgeMask(d,w,h){
+  const n=w*h, gray=new Float32Array(n);
+  for(let i=0;i<n;i++){const j=i*4; gray[i]=d[j]*0.299+d[j+1]*0.587+d[j+2]*0.114;}
+  const g=new Float32Array(n); let gmax=0;
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;
+    const gx=(gray[i-w+1]+2*gray[i+1]+gray[i+w+1])-(gray[i-w-1]+2*gray[i-1]+gray[i+w-1]);
+    const gy=(gray[i+w-1]+2*gray[i+w]+gray[i+w+1])-(gray[i-w-1]+2*gray[i-w]+gray[i-w+1]);
+    const v=Math.sqrt(gx*gx+gy*gy); g[i]=v; if(v>gmax)gmax=v;}
+  // 임계값: 배경 노이즈 수준(중앙값)의 배수. 색 대비가 큰 알약이 Otsu를 끌어올리지 않도록 함
+  const hist=new Float64Array(256), sc=255/(gmax||1);
+  for(let i=0;i<n;i++) hist[Math.min(255,(g[i]*sc)|0)]++;
+  let acc=0, medBin=0; for(let i=0;i<256;i++){acc+=hist[i]; if(acc>=n/2){medBin=i;break;}}
+  const thr=Math.min(60, Math.max(10, (medBin/sc)*3.5));
+  let e=new Uint8Array(n); for(let i=0;i<n;i++) e[i]=g[i]>thr?1:0;
+  // 윤곽을 두껍게 이어 닫힌 고리로 만들고 내부를 채움
+  const k=Math.max(2, Math.round(Math.min(w,h)/220));
+  for(let t=0;t<k;t++) e=dilate(e,w,h);
+  fillHoles(e,w,h);
+  for(let t=0;t<k+1;t++) e=erode(e,w,h);
+  // 채워진 뒤에도 얇은 띠(닫히지 않은 윤곽)만 남은 곳은 열기 연산으로 제거
+  e=dilate(erode(e,w,h),w,h);
+  return e;
+}
+function erode(a,w,h){ const o=new Uint8Array(a.length); for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x; o[i]=a[i]&&a[i-1]&&a[i+1]&&a[i-w]&&a[i+w]?1:0;} return o; }
+function dilate(a,w,h){ const o=new Uint8Array(a.length); for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x; o[i]=a[i]||a[i-1]||a[i+1]||a[i-w]||a[i+w]?1:0;} return o; }
+function fillHoles(fg,w,h){ // 가장자리에서 닿는 배경만 배경으로, 나머지는 전경
+  const n=w*h, seen=new Uint8Array(n), st=[];
+  for(let x=0;x<w;x++){ st.push(x, (h-1)*w+x); } for(let y=0;y<h;y++){ st.push(y*w, y*w+w-1); }
+  while(st.length){ const p=st.pop(); if(seen[p]||fg[p]) continue; seen[p]=1; const x=p%w,y=(p-x)/w;
+    if(x>0)st.push(p-1); if(x<w-1)st.push(p+1); if(y>0)st.push(p-w); if(y<h-1)st.push(p+w); }
+  for(let i=0;i<n;i++) if(!fg[i]&&!seen[i]) fg[i]=1;
+}
+// 거리변환(체스판 근사) + 비최대 억제로 봉우리 → 가장 가까운 봉우리로 픽셀 배정
+function splitBlob(c, fg, w, h, dt, refR){
+  let minx=w,maxx=0,miny=h,maxy=0;
+  for(const p of c){const x=p%w,y=(p-x)/w; if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;}
+  const bw=maxx-minx+3, bh=maxy-miny+3;
+  const g=new Float32Array(bw*bh); const inb=new Uint8Array(bw*bh);
+  for(const p of c){const x=p%w-minx+1,y=((p-(p%w))/w)-miny+1; inb[y*bw+x]=1; g[y*bw+x]=1e6;}
+  // 두 번 지나가는 3-4 chamfer
+  for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x; if(!inb[i]){g[i]=0;continue;}
+    g[i]=Math.min(g[i], g[i-1]+3, g[i-bw]+3, g[i-bw-1]+4, g[i-bw+1]+4);}
+  for(let y=bh-2;y>0;y--)for(let x=bw-2;x>0;x--){const i=y*bw+x; if(!inb[i])continue;
+    g[i]=Math.min(g[i], g[i+1]+3, g[i+bw]+3, g[i+bw-1]+4, g[i+bw+1]+4);}
+  let gmax=0; for(let i=0;i<g.length;i++) if(g[i]>gmax) gmax=g[i];
+  const cand=[];
+  const rad = Math.max(2, Math.round(refR*0.9));
+  for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x; if(!inb[i]) continue; const v=g[i];
+    if(v < Math.max(gmax*0.45, refR*3*0.45)) continue;
+    if(v>=g[i-1]&&v>=g[i+1]&&v>=g[i-bw]&&v>=g[i+bw]&&v>=g[i-bw-1]&&v>=g[i-bw+1]&&v>=g[i+bw-1]&&v>=g[i+bw+1]) cand.push([v,x,y]);}
+  cand.sort((a,b)=>b[0]-a[0]);
+  const peaks=[];
+  for(const [v,x,y] of cand){ let ok=true; for(const q of peaks){ if((q[0]-x)**2+(q[1]-y)**2 < rad*rad){ok=false;break;} } if(ok) peaks.push([x,y]); }
+  if(peaks.length<=1) return [c];
+  const parts=peaks.map(()=>[]);
+  for(const p of c){const x=p%w-minx+1,y=((p-(p%w))/w)-miny+1; let bi=0,bd=1e12;
+    for(let k=0;k<peaks.length;k++){const dd=(peaks[k][0]-x)**2+(peaks[k][1]-y)**2; if(dd<bd){bd=dd;bi=k;}} parts[bi].push(p);}
+  return parts.filter(p=>p.length>refR*refR*0.5);
+}
+// 알약 하나의 특징: 위치, 크기, 형태, 색
+function features(px, d, w, refA){
+  let sx=0,sy=0,sxx=0,syy=0,sxy=0,r=0,g=0,b=0;
+  const n=px.length;
+  // 색은 가운데 70% 픽셀(가장자리 반사·그림자 제외)로 계산
+  for(const p of px){const x=p%w,y=(p-x)/w; sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;}
+  const cx=sx/n, cy=sy/n;
+  const vx=sxx/n-cx*cx, vy=syy/n-cy*cy, vxy=sxy/n-cx*cy;
+  const tr=vx+vy, det=vx*vy-vxy*vxy, disc=Math.sqrt(Math.max(0,tr*tr/4-det));
+  const l1=tr/2+disc, l2=Math.max(1e-6,tr/2-disc);
+  const a=2*Math.sqrt(l1), bAx=2*Math.sqrt(l2), ang=0.5*Math.atan2(2*vxy, vx-vy);
+  const inner=[]; for(const p of px){const x=p%w,y=(p-x)/w; const dx=x-cx,dy=y-cy; const u=(dx*Math.cos(ang)+dy*Math.sin(ang))/(a||1), v=(-dx*Math.sin(ang)+dy*Math.cos(ang))/(bAx||1); if(u*u+v*v<0.5) inner.push(p);}
+  const src = inner.length>8?inner:px;
+  const rr=[],gg=[],bb=[];
+  for(const p of src){const j=p*4; rr.push(d[j]);gg.push(d[j+1]);bb.push(d[j+2]);}
+  const med=arr=>{arr.sort((p,q)=>p-q);return arr[arr.length>>1];};
+  r=med(rr);g=med(gg);b=med(bb);
+  const hsv=rgb2hsv(r,g,b);
+  const elong = a/(bAx||1);
+  return [{cx,cy,a,b:bAx,ang,area:n,relArea:n/refA,elong,rgb:[r,g,b],hsv}];
+}
+function rgb2hsv(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),dl=mx-mn;let hh=0;
+  if(dl>0){ if(mx===r)hh=((g-b)/dl)%6; else if(mx===g)hh=(b-r)/dl+2; else hh=(r-g)/dl+4; hh*=60; if(hh<0)hh+=360; }
+  return [hh, mx?dl/mx:0, mx];}
+
+// ───────────────────────── 군집화(응집형, 평균 연결)
+function featVec(p){
+  const [hh,s,v]=p.hsv; const sw=Math.min(1,s*2.2); const hr=hh*Math.PI/180;
+  return [Math.cos(hr)*sw*2.2, Math.sin(hr)*sw*2.2, s*2.6, v*2.0, Math.log(Math.max(0.2,p.relArea))*1.0, Math.log(Math.max(1,p.elong))*1.8];
+}
+function cluster(pills, sens){
+  const N=pills.length; if(N===0) return [];
+  const F=pills.map(featVec);
+  const thr = 0.28 + (9-sens)*0.11; // 민감도 높을수록(9) 더 잘게 나눔
+  let cl=F.map((_,i)=>[i]);
+  const dist=(A,B)=>{let s=0,c=0; for(const i of A)for(const j of B){let dd=0; for(let k=0;k<6;k++){const t=F[i][k]-F[j][k]; dd+=t*t;} s+=Math.sqrt(dd); c++;} return s/c;};
+  while(cl.length>1){
+    let bi=-1,bj=-1,bd=Infinity;
+    for(let i=0;i<cl.length;i++)for(let j=i+1;j<cl.length;j++){const dd=dist(cl[i],cl[j]); if(dd<bd){bd=dd;bi=i;bj=j;}}
+    if(bd>thr) break;
+    cl[bi]=cl[bi].concat(cl[bj]); cl.splice(bj,1);
+  }
+  return cl;
+}
+
+// ───────────────────────── 렌더링
+function groupColor(gi){ return PALETTE[gi%PALETTE.length]; }
+// 같은 종류 안에서의 면적 중앙값을 1정으로 보고, 그보다 훨씬 큰 덩어리는 여러 정으로 추정
+function groupUnit(gi){ const g=state.groups[gi]; const as=g.map(i=>state.pills[i].area).sort((a,b)=>a-b); return as.length>=3 ? as[Math.floor(as.length*0.4)] : null; }
+function estCount(gi,i){ const p=state.pills[i]; const u=groupUnit(gi); const r = u ? p.area/u : p.relArea; return Math.max(1, Math.round(r - 0.15)); }
+function groupCount(gi){ const g=state.groups[gi]; let c=0; for(const i of g){ c+=estCount(gi,i); } return c + (state.adjust[gi]||0); }
+function describe(gi){
+  const g=state.groups[gi]; const ps=g.map(i=>state.pills[i]);
+  const avg=k=>ps.reduce((s,p)=>s+p[k],0)/ps.length;
+  const H=ps.reduce((s,p)=>s+p.hsv[0],0)/ps.length, S=ps.reduce((s,p)=>s+p.hsv[1],0)/ps.length, V=ps.reduce((s,p)=>s+p.hsv[2],0)/ps.length;
+  let color = S<0.12 ? (V>0.8?'흰색':V>0.45?'회색':'검정') : H<15||H>=340?'빨강':H<40?'주황':H<70?'노랑':H<170?'녹색':H<255?'파랑':H<300?'보라':'분홍';
+  if(S>=0.12&&S<0.3&&V>0.75) color='연한 '+color;
+  const el=avg('elong'); const shape = el<1.25?'원형':el<1.9?'타원형':'장방형';
+  const ra=avg('relArea'); const size = ra<0.6?'작은':ra>1.6?'큰':'중간';
+  return `${color} · ${shape} · ${size} 크기`;
+}
+function render(){
+  drawOverlay(); renderGroups();
+  const total = state.groups.reduce((s,_,i)=>s+groupCount(i),0);
+  $('total').textContent = total; $('kinds').textContent = state.groups.length;
+}
+function drawOverlay(){
+  const w=overlay.width,h=overlay.height; octx.clearRect(0,0,w,h);
+  const showNum=$('show-num').checked;
+  const lw=Math.max(1.5, w/300);
+  state.groups.forEach((g,gi)=>{
+    const col=groupColor(gi); const dim = state.selected>=0 && state.selected!==gi;
+    octx.globalAlpha = dim?0.25:1;
+    let k=0;
+    for(const i of g){ const p=state.pills[i]; k++;
+      octx.beginPath(); octx.ellipse(p.cx,p.cy,p.a*0.98+lw,p.b*0.98+lw,p.ang,0,Math.PI*2);
+      octx.strokeStyle=col; octx.lineWidth=lw; octx.stroke();
+      if(state.selected===gi){ octx.fillStyle=col; octx.globalAlpha=0.28; octx.fill(); octx.globalAlpha=1; }
+      const est=estCount(gi,i);
+      if(showNum){ const fs=Math.max(9, Math.min(p.b*0.9, w/40)); octx.font=`600 ${fs}px "IBM Plex Mono",monospace`; octx.textAlign='center'; octx.textBaseline='middle';
+        const t = est>1?`×${est}`:String(k);
+        const tw=octx.measureText(t).width+fs*0.6; octx.fillStyle='rgba(10,14,12,.75)'; roundRect(p.cx-tw/2,p.cy-fs*0.62,tw,fs*1.24,fs*0.35); octx.fill();
+        octx.fillStyle= est>1?'#FFD400':'#fff'; octx.fillText(t,p.cx,p.cy+fs*0.04); }
+    }
+  });
+  octx.globalAlpha=1;
+}
+function roundRect(x,y,w,h,r){octx.beginPath();octx.moveTo(x+r,y);octx.arcTo(x+w,y,x+w,y+h,r);octx.arcTo(x+w,y+h,x,y+h,r);octx.arcTo(x,y+h,x,y,r);octx.arcTo(x,y,x+w,y,r);octx.closePath();}
+function renderGroups(){
+  const root=$('groups'); root.innerHTML='';
+  if(!state.pills.length){ root.innerHTML='<div class="empty"><b>알약을 찾지 못했습니다.</b><br>단색 배경 위에 알약을 펼쳐 놓고 다시 촬영해 보세요.</div>'; return; }
+  state.groups.forEach((g,gi)=>{
+    const el=document.createElement('div'); el.className='group'; el.setAttribute('role','button'); el.tabIndex=0; el.id='group-'+gi;
+    el.setAttribute('aria-selected', state.selected===gi);
+    if(state.mergePick.has(gi)) el.classList.add('merge-pick');
+    const col=groupColor(gi);
+    const sw=document.createElement('div'); sw.className='sw';
+    const c=document.createElement('canvas'); c.width=88; c.height=88; sw.appendChild(c);
+    const tag=document.createElement('span'); tag.className='tag'; tag.style.background=col; sw.appendChild(tag);
+    // 대표 알약 썸네일
+    const rep=state.pills[g[0]]; const r=Math.max(rep.a,rep.b)*1.35;
+    const cc=c.getContext('2d'); cc.drawImage(photo, rep.cx-r, rep.cy-r, 2*r, 2*r, 0,0,88,88);
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.innerHTML=`<div class="name"><span class="dot" style="background:${col}"></span>종류 ${gi+1}</div><div class="desc">${describe(gi)} · ${g.length}개 감지</div>`;
+    const cnt=document.createElement('div'); cnt.className='count'+(state.adjust[gi]?' adj':''); cnt.textContent=groupCount(gi);
+    const adj=document.createElement('div'); adj.className='adjust';
+    const up=document.createElement('button'); up.textContent='+'; up.setAttribute('aria-label',`종류 ${gi+1} 개수 1 늘리기`);
+    const dn=document.createElement('button'); dn.textContent='−'; dn.setAttribute('aria-label',`종류 ${gi+1} 개수 1 줄이기`);
+    up.onclick=e=>{e.stopPropagation(); state.adjust[gi]=(state.adjust[gi]||0)+1; render();};
+    dn.onclick=e=>{e.stopPropagation(); if(groupCount(gi)>0){state.adjust[gi]=(state.adjust[gi]||0)-1; render();}};
+    adj.append(up,dn);
+    el.append(sw,meta,cnt,adj);
+    el.onclick=()=>onGroupTap(gi);
+    el.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault(); onGroupTap(gi);} };
+    root.appendChild(el);
+  });
+}
+function onGroupTap(gi){
+  if(live.on) return;
+  if(state.merging){ state.mergePick.has(gi)?state.mergePick.delete(gi):state.mergePick.add(gi);
+    const k=state.mergePick.size; $('merge-apply').disabled=k<2; $('merge-msg').textContent = k<2?'합칠 종류를 두 개 이상 선택하세요':`${k}개 종류를 하나로 합칩니다`;
+    renderGroups(); return; }
+  state.selected = state.selected===gi?-1:gi; render();
+}
+function setChip(t,busy){ const c=$('chip-state'); c.textContent=t; c.classList.toggle('busy',!!busy); }
+
+// ───────────────────────── 합치기
+function startMerge(){ if(state.groups.length<2) return; state.merging=true; state.mergePick.clear(); state.selected=-1; $('merge-bar').hidden=false; $('merge-apply').disabled=true; $('merge-msg').textContent='합칠 종류를 두 개 이상 선택하세요'; render(); }
+function cancelMerge(){ state.merging=false; state.mergePick.clear(); $('merge-bar').hidden=true; renderGroups(); }
+function applyMerge(){
+  const picks=[...state.mergePick].sort((a,b)=>a-b); if(picks.length<2) return;
+  const merged=[].concat(...picks.map(i=>state.groups[i])); let adj=0; picks.forEach(i=>adj+=state.adjust[i]||0);
+  const rest=state.groups.filter((_,i)=>!state.mergePick.has(i)); const restAdj={}; state.groups.forEach((_,i)=>{ if(!state.mergePick.has(i)) restAdj[rest.indexOf(state.groups[i])]=state.adjust[i]||0; });
+  state.groups=[merged,...rest].sort((a,b)=>b.length-a.length);
+  const newAdj={}; state.groups.forEach((g,i)=>{ if(g===merged) newAdj[i]=adj; else { const ri=rest.indexOf(g); if(restAdj[ri]) newAdj[i]=restAdj[ri]; } });
+  state.adjust=newAdj; state.merging=false; state.mergePick.clear(); $('merge-bar').hidden=true; render();
+}
+
+// ───────────────────────── 예시 이미지(합성)
+function makeSample(){
+  const w=720,h=540; const c=document.createElement('canvas'); c.width=w;c.height=h; const x=c.getContext('2d');
+  // 조제 트레이 느낌의 밝은 배경 + 은은한 조명 기울기
+  const gr=x.createLinearGradient(0,0,w,h); gr.addColorStop(0,'#F4F1EC'); gr.addColorStop(1,'#E4E0D8'); x.fillStyle=gr; x.fillRect(0,0,w,h);
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const kinds=[
+    {n:9, col:'#F2F0EA', rx:19, ry:19, imprint:'#D8D4CC'},      // 흰 원형정
+    {n:7, col:'#E4572E', rx:26, ry:12, imprint:'#C94A25'},      // 주황 장방형
+    {n:5, col:'#3D6FD8', rx:20, ry:13, imprint:'#2F5BB8'},      // 파랑 타원
+    {n:6, col:'#F5D547', rx:14, ry:14, imprint:'#D9B92E'},      // 노랑 소형 원형
+  ];
+  const placed=[]; const truth={};
+  for(const k of kinds){ truth[k.col]=0;
+    for(let i=0;i<k.n;i++){ let tries=0, px,py,ang;
+      do{ px=rnd(60,w-60); py=rnd(60,h-60); ang=rnd(0,Math.PI); tries++; }
+      while(tries<200 && placed.some(p=>Math.hypot(p.x-px,p.y-py) < p.r+Math.max(k.rx,k.ry)+6));
+      if(tries>=200) continue;
+      placed.push({x:px,y:py,r:Math.max(k.rx,k.ry)}); truth[k.col]++;
+      x.save(); x.translate(px,py); x.rotate(ang);
+      x.shadowColor='rgba(0,0,0,.22)'; x.shadowBlur=6; x.shadowOffsetX=2; x.shadowOffsetY=3;
+      x.fillStyle=k.col; x.beginPath(); x.ellipse(0,0,k.rx,k.ry,0,0,Math.PI*2); x.fill();
+      x.shadowColor='transparent';
+      const hl=x.createRadialGradient(-k.rx*0.3,-k.ry*0.35,1,0,0,Math.max(k.rx,k.ry)); hl.addColorStop(0,'rgba(255,255,255,.55)'); hl.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=hl; x.fill();
+      x.strokeStyle=k.imprint; x.lineWidth=1.5; x.beginPath(); x.moveTo(-k.rx*0.5,0); x.lineTo(k.rx*0.5,0); x.stroke();
+      x.restore();
+    }
+  }
+  // 두 개가 살짝 맞닿은 케이스 하나(분할 시험)
+  const k=kinds[0]; const bx=rnd(120,w-160), by=rnd(120,h-120);
+  if(!placed.some(p=>Math.hypot(p.x-bx-19,p.y-by)<p.r+45)){
+    for(const dx of [0,36]){ x.save(); x.translate(bx+dx,by); x.shadowColor='rgba(0,0,0,.22)'; x.shadowBlur=6; x.shadowOffsetY=3; x.fillStyle=k.col; x.beginPath(); x.arc(0,0,19,0,Math.PI*2); x.fill(); x.restore(); truth[k.col]++; }
+  }
+  c.dataset.truth = JSON.stringify(truth);
+  window.__sampleTruth = truth;
+  return c;
+}
+function loadSample(){ const c=makeSample(); setImage(c, '예시 이미지'); }
+
+
+// ───────────────────────── 실시간(동영상) 카운팅
+const liveVideo = $('live');
+const live = { on:false, stream:null, timer:null, busy:false, hist:[], lastT:0 };
+async function startLive(file){
+  stopLive(true);
+  try{
+    if(file){
+      liveVideo.srcObject = null; liveVideo.src = URL.createObjectURL(file); liveVideo.loop = true;
+      state.source = '동영상';
+    }else{
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('이 브라우저는 실시간 카메라를 지원하지 않습니다');
+      live.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:960 } }, audio:false });
+      liveVideo.srcObject = live.stream; state.source = '실시간';
+    }
+    await liveVideo.play();
+  }catch(e){ setChip('카메라를 열 수 없습니다: '+(e.message||e.name)); return; }
+  live.on = true; live.hist = []; state.selected=-1; cancelMerge();
+  $('live-bar').hidden=false; $('btn-freeze').hidden=false; $('btn-stop').hidden=false;
+  for(const id of ['btn-live','btn-camera','btn-file','btn-sample']) $(id).hidden=true;
+  $('dock-row').classList.add('live');
+  document.querySelectorAll('.group .adjust').forEach(a=>a.style.visibility='hidden');
+  liveTick();
+}
+function liveTick(){
+  if(!live.on) return;
+  if(liveVideo.readyState >= 2 && !live.busy){
+    live.busy = true;
+    const t0 = performance.now();
+    const MAX = 640;
+    const vw = liveVideo.videoWidth, vh = liveVideo.videoHeight;
+    if(vw && vh){
+      const sc = Math.min(1, MAX/Math.max(vw,vh));
+      const w = Math.round(vw*sc), h = Math.round(vh*sc);
+      if(photo.width!==w||photo.height!==h){ photo.width=w; photo.height=h; overlay.width=w; overlay.height=h; }
+      pctx.drawImage(liveVideo, 0, 0, w, h);
+      try{
+        const pills = segment(pctx.getImageData(0,0,w,h).data, w, h);
+        state.pills = pills;
+        state.groups = state.mode==='single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
+        state.groups.sort((a,b)=>b.length-a.length);
+        state.adjust = {};
+        // 흔들림 완화: 최근 5프레임 합계의 중앙값을 안내 문구에 표시
+        const total = state.groups.reduce((s,_,i)=>s+groupCount(i),0);
+        live.hist.push(total); if(live.hist.length>5) live.hist.shift();
+        const med = [...live.hist].sort((a,b)=>a-b)[live.hist.length>>1];
+        render();
+        document.querySelectorAll('.group .adjust').forEach(a=>a.style.visibility='hidden');
+        const ms = Math.round(performance.now()-t0);
+        $('live-msg').textContent = pills.length ? `안정 추정 ${med}정 · ${state.groups.length}종류` : '알약이 잘 보이도록 카메라를 위에서 비추세요';
+        $('live-fps').textContent = `${w}×${h} · ${ms}ms`;
+        setChip(state.source); $('chip-time').hidden=true;
+      }catch(e){ console.error(e); }
+    }
+    live.busy = false;
+  }
+  live.timer = setTimeout(()=>requestAnimationFrame(liveTick), 350);
+}
+function freezeLive(){
+  if(!live.on) return;
+  // 현재 프레임을 고화질로 다시 그려 고정 → 일반 사진 모드(보정·합치기 가능)
+  const vw = liveVideo.videoWidth, vh = liveVideo.videoHeight;
+  const snap = document.createElement('canvas'); snap.width=vw; snap.height=vh; snap.getContext('2d').drawImage(liveVideo,0,0);
+  const label = state.source==='동영상' ? '동영상 장면' : '고정 장면';
+  stopLive(false);
+  setImage(snap, label);
+}
+function stopLive(silent){
+  live.on = false; clearTimeout(live.timer);
+  if(live.stream){ live.stream.getTracks().forEach(t=>t.stop()); live.stream=null; }
+  liveVideo.pause(); if(liveVideo.src){ URL.revokeObjectURL(liveVideo.src); liveVideo.removeAttribute('src'); } liveVideo.srcObject=null;
+  $('live-bar').hidden=true; $('btn-freeze').hidden=true; $('btn-stop').hidden=true;
+  for(const id of ['btn-live','btn-camera','btn-file','btn-sample']) $(id).hidden=false;
+  $('dock-row').classList.remove('live');
+  if(!silent){ document.querySelectorAll('.group .adjust').forEach(a=>a.style.visibility=''); }
+}
+$('btn-live').onclick=()=>startLive();
+$('btn-freeze').onclick=freezeLive;
+$('btn-stop').onclick=()=>{ stopLive(false); render(); };
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && live.on && live.stream) { stopLive(false); render(); } });
+
+// ───────────────────────── 이벤트
+$('btn-camera').onclick=()=>$('file-camera').click();
+$('btn-file').onclick=()=>$('file-pick').click();
+$('file-camera').onchange=e=>{loadFile(e.target.files[0]); e.target.value='';};
+$('file-pick').onchange=e=>{loadFile(e.target.files[0]); e.target.value='';};
+$('btn-sample').onclick=loadSample;
+$('sens').oninput=()=>{ if(state.pills.length){ state.groups = state.mode==='single'?[state.pills.map((_,i)=>i)]:cluster(state.pills,+$('sens').value); state.groups.sort((a,b)=>b.length-a.length); state.adjust={}; state.selected=-1; cancelMerge(); render(); } };
+$('show-num').onchange=drawOverlay;
+$('mode-auto').onclick=()=>setMode('auto'); $('mode-single').onclick=()=>setMode('single');
+function setMode(m){ state.mode=m; $('mode-auto').setAttribute('aria-pressed',m==='auto'); $('mode-single').setAttribute('aria-pressed',m==='single'); $('sens').disabled = m==='single'; $('sens').oninput(); }
+$('btn-merge').onclick=startMerge; $('merge-cancel').onclick=cancelMerge; $('merge-apply').onclick=applyMerge;
+$('btn-copy').onclick=async()=>{
+  const lines=state.groups.map((g,i)=>`종류 ${i+1} (${describe(i)}): ${groupCount(i)}정`);
+  const total=state.groups.reduce((s,_,i)=>s+groupCount(i),0);
+  const txt=`알약캡쳐 결과 · ${new Date().toLocaleString('ko-KR')}\n${lines.join('\n')}\n합계: ${total}정`;
+  try{ await navigator.clipboard.writeText(txt); $('btn-copy').textContent='복사됨'; setTimeout(()=>$('btn-copy').textContent='결과 복사',1400); }catch{ alert(txt); }
+};
+// 드래그앤드롭(PC)
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault(); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&(f.type.startsWith('image/')||f.type.startsWith('video/'))) loadFile(f);});
+// 테스트 훅
+window.__pill = { state, analyze, loadSample, groupCount };
+
+loadSample();
+})();
+</script>
