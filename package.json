@@ -12,5 +12,8 @@
     "@capacitor/android": "^6.1.2",
     "@capacitor/cli": "^6.1.2",
     "@capacitor/core": "^6.1.2"
+  },
+  "dependencies": {
+    "@revenuecat/purchases-capacitor": "^9.0.0"
   }
 }

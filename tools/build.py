@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """src/app.html → docs/ (PWA + Capacitor webDir)
    - index.html : 완전한 HTML 문서로 감싸고 manifest/아이콘/서비스워커 등록
-   - manifest.webmanifest, sw.js, icons/, privacy.html, store/(스토어 이미지)
+   - manifest.webmanifest, sw.js, icons/, privacy.html, terms.html, store/(스토어 이미지)
 """
-import pathlib, shutil, subprocess, sys, json, hashlib
+import pathlib, shutil, subprocess, sys, json, hashlib, os
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / 'src/app.html'
@@ -18,6 +18,8 @@ for n in (180, 192, 512):
     shutil.copy(ROOT / f'assets/icons/icon-{n}.png', DOCS / f'icons/icon-{n}.png')
 
 body = SRC.read_text(encoding='utf-8')
+# RevenueCat 공개 API 키 주입 (GitHub Secrets → 환경변수). 없으면 플레이스홀더 유지(구독 비활성)
+body = body.replace('__RC_ANDROID_KEY__', os.environ.get('RC_ANDROID_KEY', '__RC_ANDROID_KEY__')).replace('__RC_IOS_KEY__', os.environ.get('RC_IOS_KEY', '__RC_IOS_KEY__'))
 ver = hashlib.sha1(body.encode()).hexdigest()[:8]
 html = f'''<!doctype html>
 <html lang="ko">
@@ -69,6 +71,7 @@ self.addEventListener('fetch', e => {{
 (DOCS / 'sw.js').write_text(sw, encoding='utf-8')
 (DOCS / '.nojekyll').write_text('')
 shutil.copy(ROOT / 'store/privacy.html', DOCS / 'privacy.html')
+shutil.copy(ROOT / 'store/terms.html', DOCS / 'terms.html')
 # 스토어 등록용 이미지도 Pages로 공개 (콘솔 업로드용)
 SS = ROOT / 'store/screenshots'
 if SS.exists():
