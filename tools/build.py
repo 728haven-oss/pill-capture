@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """src/app.html → docs/ (PWA + Capacitor webDir)
    - index.html : 완전한 HTML 문서로 감싸고 manifest/아이콘/서비스워커 등록
-   - manifest.webmanifest, sw.js, icons/, privacy.html
+   - manifest.webmanifest, sw.js, icons/, privacy.html, store/(스토어 이미지)
 """
 import pathlib, shutil, subprocess, sys, json, hashlib
 
@@ -69,4 +69,10 @@ self.addEventListener('fetch', e => {{
 (DOCS / 'sw.js').write_text(sw, encoding='utf-8')
 (DOCS / '.nojekyll').write_text('')
 shutil.copy(ROOT / 'store/privacy.html', DOCS / 'privacy.html')
+# 스토어 등록용 이미지도 Pages로 공개 (콘솔 업로드용)
+SS = ROOT / 'store/screenshots'
+if SS.exists():
+    (DOCS / 'store').mkdir(exist_ok=True)
+    for f in SS.glob('*.png'): shutil.copy(f, DOCS / 'store' / f.name)
+    for n in (512, 1024): shutil.copy(ROOT / f'assets/icons/icon-{n}.png', DOCS / 'store' / f'icon-{n}.png')
 print('build OK →', DOCS, 'version', ver)
