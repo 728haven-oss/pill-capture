@@ -1,0 +1,40 @@
+name: Android APK
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'tools/**', 'capacitor.config.json', 'package.json', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions: { contents: write }
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - name: Build web (docs/)
+        run: pip install pillow && python3 tools/build.py
+      - name: Capacitor android project
+        run: bash tools/cap_android.sh
+      - name: Gradle assembleDebug
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Rename
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk pill-capture-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pill-capture-apk
+          path: pill-capture-debug.apk
+      - name: Release (latest)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: 알약캡쳐 APK (최신)
+          body: "main 브랜치 최신 빌드(디버그 서명, 테스트용). 안드로이드에서 다운로드 후 '출처를 알 수 없는 앱 허용'으로 설치하세요."
+          files: pill-capture-debug.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
