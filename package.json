@@ -1,0 +1,16 @@
+{
+  "name": "pill-capture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "알약캡쳐 - 알약 사진 한 장으로 종류별 개수 확인",
+  "scripts": {
+    "build": "python3 tools/build.py",
+    "cap:android": "bash tools/cap_android.sh",
+    "cap:sync": "npx cap sync"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  }
+}

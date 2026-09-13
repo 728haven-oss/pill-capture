@@ -1,0 +1,9 @@
+node_modules/
+android/
+ios/
+assets/
+docs/
+*.jks
+*.p12
+*.mobileprovision
+.DS_Store
