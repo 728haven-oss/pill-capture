@@ -1,0 +1,106 @@
+# 플레이스토어 제출용 서명 AAB/APK
+#  - 실행: 태그 v1.0.0 푸시 또는 Actions에서 수동 실행(workflow_dispatch)
+#  - 필요한 시크릿 (Settings → Secrets and variables → Actions):
+#      ANDROID_KEYSTORE_BASE64  (upload.jks 를 base64 한 문자열)
+#      ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS(=pillcapture), ANDROID_KEY_PASSWORD
+#  - 키스토어 만들기(Windows PowerShell, JDK 17):
+#      keytool -genkeypair -v -keystore upload.jks -alias pillcapture -keyalg RSA -keysize 2048 -validity 10000
+#      [Convert]::ToBase64String([IO.File]::ReadAllBytes("upload.jks")) | Set-Clipboard
+name: Android Release (Play)
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version_name: { description: '버전명 (예: 1.0.0)', required: false, default: '' }
+permissions: { contents: write }
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - name: Version
+        id: v
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then VN="${GITHUB_REF#refs/tags/v}"; else VN="${{ github.event.inputs.version_name }}"; fi
+          [ -z "$VN" ] && VN="1.0.${GITHUB_RUN_NUMBER}"
+          echo "name=$VN" >> $GITHUB_OUTPUT
+          echo "code=$((GITHUB_RUN_NUMBER + 100))" >> $GITHUB_OUTPUT
+      - name: Build web (docs/)
+        run: pip install pillow && python3 tools/build.py
+      - name: Capacitor android project
+        run: bash tools/cap_android.sh
+      - name: Version into gradle
+        run: |
+          sed -i "s/versionCode [0-9]*/versionCode ${{ steps.v.outputs.code }}/; s/versionName \"[^\"]*\"/versionName \"${{ steps.v.outputs.name }}\"/" android/app/build.gradle
+          grep -n "versionCode\|versionName" android/app/build.gradle
+      - name: Signing mode
+        id: m
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then echo "signed=true" >> $GITHUB_OUTPUT; else echo "signed=false" >> $GITHUB_OUTPUT; echo "::notice::키스토어 시크릿이 없어 서명 없는 AAB/APK를 만듭니다. jarsigner/apksigner로 별도 서명하세요."; fi
+      - name: Decode keystore
+        if: steps.m.outputs.signed == 'true'
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload.jks
+      - name: Signing config
+        if: steps.m.outputs.signed == 'true'
+        run: |
+          cat >> android/app/build.gradle <<'G'
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file("upload.jks")
+                      storePassword System.getenv("KS_PASS")
+                      keyAlias System.getenv("KS_ALIAS")
+                      keyPassword System.getenv("KEY_PASS")
+                  }
+              }
+              buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+          }
+          G
+      - name: Unsigned release config
+        if: steps.m.outputs.signed == 'false'
+        run: |
+          cat >> android/app/build.gradle <<'G'
+          android { buildTypes { release { signingConfig null; minifyEnabled false } } }
+          G
+      - name: Gradle bundleRelease + assembleRelease
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export KS_PASS=$(printf %s "$KS_PASS" | tr -d '\r\n\t '); export KEY_PASS=$(printf %s "$KEY_PASS" | tr -d '\r\n\t '); export KS_ALIAS=$(printf %s "$KS_ALIAS" | tr -d '\r\n\t ')
+          if [ "${{ steps.m.outputs.signed }}" = "true" ]; then
+            [ -z "$KEY_PASS" ] && export KEY_PASS="$KS_PASS"
+            [ -z "$KS_ALIAS" ] && export KS_ALIAS="pillcapture"
+            keytool -list -keystore android/app/upload.jks -storepass "$KS_PASS" -alias "$KS_ALIAS" >/dev/null && echo "keystore OK (alias $KS_ALIAS)"
+          fi
+          cd android && chmod +x gradlew && ./gradlew bundleRelease assembleRelease --no-daemon
+      - name: Collect
+        run: |
+          ls -R android/app/build/outputs/bundle android/app/build/outputs/apk
+          cp android/app/build/outputs/bundle/release/app-release*.aab pill-capture-${{ steps.v.outputs.name }}.aab
+          cp android/app/build/outputs/apk/release/app-release*.apk pill-capture-${{ steps.v.outputs.name }}.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pill-capture-release-${{ steps.v.outputs.name }}
+          path: |
+            pill-capture-${{ steps.v.outputs.name }}.aab
+            pill-capture-${{ steps.v.outputs.name }}.apk
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', steps.v.outputs.name) }}
+          name: 알약캡쳐 v${{ steps.v.outputs.name }}${{ steps.m.outputs.signed == 'true' && '' || ' (unsigned)' }}
+          body: "${{ steps.m.outputs.signed == 'true' && '플레이스토어 제출용 서명 AAB + 서명 APK. Play Console → 프로덕션(또는 내부 테스트) → 새 버전 → AAB 업로드.' || '서명 없는 릴리스 빌드. 키스토어 시크릿 등록 후 다시 실행하면 서명본이 만들어집니다.' }}"
+          prerelease: ${{ steps.m.outputs.signed != 'true' }}
+          files: |
+            pill-capture-${{ steps.v.outputs.name }}.aab
+            pill-capture-${{ steps.v.outputs.name }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
