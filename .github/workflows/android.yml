@@ -16,6 +16,7 @@ jobs:
         with: { distribution: 'temurin', java-version: '17' }
       - uses: android-actions/setup-android@v3
       - name: Build web (docs/)
+        env: { RC_ANDROID_KEY: "${{ secrets.RC_ANDROID_KEY }}", RC_IOS_KEY: "${{ secrets.RC_IOS_KEY }}" }
         run: pip install pillow && python3 tools/build.py
       - name: Capacitor android project
         run: bash tools/cap_android.sh
