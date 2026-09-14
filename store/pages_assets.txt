@@ -1,0 +1,2 @@
+# Pages(docs/store/)로 함께 공개할 파일 URL — 콘솔 업로드용
+https://github.com/728haven-oss/pill-capture/releases/download/build-1.0.0/pill-capture-1.0.0.aab

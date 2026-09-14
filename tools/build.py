@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """src/app.html → docs/ (PWA + Capacitor webDir)
    - index.html : 완전한 HTML 문서로 감싸고 manifest/아이콘/서비스워커 등록
-   - manifest.webmanifest, sw.js, icons/, privacy.html, terms.html, store/(스토어 이미지)
+   - manifest.webmanifest, sw.js, icons/
 """
 import pathlib, shutil, subprocess, sys, json, hashlib, os
 
@@ -78,4 +78,18 @@ if SS.exists():
     (DOCS / 'store').mkdir(exist_ok=True)
     for f in SS.glob('*.png'): shutil.copy(f, DOCS / 'store' / f.name)
     for n in (512, 1024): shutil.copy(ROOT / f'assets/icons/icon-{n}.png', DOCS / 'store' / f'icon-{n}.png')
+# store/pages_assets.txt 에 적힌 URL(릴리스 AAB 등)을 docs/store/ 로 내려받아 Pages에 함께 공개 (콘솔 업로드용, 실패해도 무시)
+#  (Pages 워크플로에서만 — 앱 빌드(docs=webDir)에 섞이지 않도록)
+PA = ROOT / 'store/pages_assets.txt'
+if PA.exists() and os.environ.get('GITHUB_WORKFLOW', '').startswith('PWA'):
+    import urllib.request
+    (DOCS / 'store').mkdir(exist_ok=True)
+    for line in PA.read_text(encoding='utf-8').splitlines():
+        url = line.strip()
+        if not url or url.startswith('#'): continue
+        try:
+            urllib.request.urlretrieve(url, DOCS / 'store' / url.rsplit('/', 1)[-1])
+            print('fetched', url)
+        except Exception as e:
+            print('skip', url, e)
 print('build OK →', DOCS, 'version', ver)
