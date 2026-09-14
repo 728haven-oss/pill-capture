@@ -28,7 +28,6 @@ jobs:
       - name: Capacitor iOS project
         run: |
           npm install
-          npm install @capacitor/ios@^6
           npx cap add ios
           npx cap sync ios
           P=ios/App/App/Info.plist
