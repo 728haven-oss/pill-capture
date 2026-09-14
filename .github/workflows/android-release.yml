@@ -97,7 +97,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('build-{0}', steps.v.outputs.name) }}
-          name: 알약캡쳐 v${{ steps.v.outputs.name }}${{ steps.m.outputs.signed == 'true' && '' || ' (unsigned)' }}
+          name: 알약캡쳐 v${{ steps.v.outputs.name }}${{ steps.m.outputs.signed != 'true' && ' (unsigned)' || '' }}
           body: "${{ steps.m.outputs.signed == 'true' && '플레이스토어 제출용 서명 AAB + 서명 APK. Play Console → 프로덕션(또는 내부 테스트) → 새 버전 → AAB 업로드.' || '서명 없는 릴리스 빌드. 키스토어 시크릿 등록 후 다시 실행하면 서명본이 만들어집니다.' }}"
           prerelease: ${{ steps.m.outputs.signed != 'true' }}
           files: |
