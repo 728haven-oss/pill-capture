@@ -20,3 +20,11 @@
 - Google Play 개발자 계정, 업로드 키스토어(`android-release.yml` 주석의 keytool 명령), 개인정보처리방침 URL(`store/privacy.html` 이 Pages에 `privacy.html` 로 함께 배포됨)
 - Apple 개발자 계정($99/년), 배포 인증서(.p12), App Store 프로비저닝 프로파일(Bundle ID `kr.pillcapture.app`), App Store Connect API 키
 - 카메라 권한 문구는 CI가 Info.plist / AndroidManifest 에 자동 삽입
+
+## 결제(구독) 켜기/끄기 — ⚠️ 현재 OFF (무료 배포 중)
+
+- `config/billing.json` 의 `enabled` 로 제어합니다. **현재 `false`**: 모든 기능 무제한, 페이월·요금제 표시 없음, 결제 라이브러리(RevenueCat) 미포함.
+- 다시 켜기: `bash tools/enable_billing.sh` → `enabled:true` + `package.json` 에 `@revenuecat/purchases-capacitor` 복원 → 커밋·태그 푸시.
+- 결제 전체 구현(월 2,000원 `pro_monthly`, RevenueCat `pro` 엔타이틀먼트, 무료 하루 5회)의 원본은 브랜치 **`billing-v1`** 에 보존.
+- 재개 전 할 일: 통신판매업 신고 → Play Console 계정 세부정보(사업자번호·신고번호·신고기관) 입력, Play 구독 기본 요금제 재활성화.
+- 예정(1.1.0): 카카오·구글·네이버·Apple 로그인 + 가입 후 2개월 무료 → 이후 구독.

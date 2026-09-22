@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "_comment": "false = 완전 무료 배포(결제 라이브러리 제외, 페이월 숨김). 결제 재개 시 tools/enable_billing.sh 실행 → true + RevenueCat 의존성 복원. 전체 결제 구현 원본: 브랜치 billing-v1 (commit b4f5dff)",
+  "plugin": "@revenuecat/purchases-capacitor",
+  "plugin_version": "^11.0.0"
+}

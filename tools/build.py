@@ -20,6 +20,20 @@ for n in (180, 192, 512):
 body = SRC.read_text(encoding='utf-8')
 # RevenueCat 공개 API 키 주입 (GitHub Secrets → 환경변수). 없으면 플레이스홀더 유지(구독 비활성)
 body = body.replace('__RC_ANDROID_KEY__', os.environ.get('RC_ANDROID_KEY', '__RC_ANDROID_KEY__')).replace('__RC_IOS_KEY__', os.environ.get('RC_IOS_KEY', '__RC_IOS_KEY__'))
+# ── 결제 on/off (config/billing.json) ─────────────────────────────
+#  enabled:false → 완전 무료 배포: 모든 기능 무제한, 요금제 표시·페이월·RevenueCat 초기화 비활성
+#  결제 재개: bash tools/enable_billing.sh  (전체 결제 구현 원본: 브랜치 billing-v1)
+_bc = ROOT / 'config/billing.json'
+BILLING = json.loads(_bc.read_text(encoding='utf-8')).get('enabled', True) if _bc.exists() else True
+for a, b in [
+    ("const FREE_PER_DAY = 5;", "const FREE_PER_DAY = 5;\nconst BILLING = %s; // config/billing.json" % ('true' if BILLING else 'false')),
+    ("function canAnalyze(kind){ // kind: 'photo' | 'live' | 'video'\n", "function canAnalyze(kind){ // kind: 'photo' | 'live' | 'video'\n  if(!BILLING) return true;\n"),
+    ("  if(!Pro.native){ $('plan').hidden = true; return; }", "  if(!BILLING || !Pro.native){ $('plan').hidden = true; return; }"),
+    ("  renderPlan();\n  if(!Pro.native) return;", "  renderPlan();\n  if(!BILLING || !Pro.native) return;"),
+]:
+    assert body.count(a) == 1, 'billing patch target not found: ' + a[:40]
+    body = body.replace(a, b)
+print('billing', 'ON' if BILLING else 'OFF (free build)')
 ver = hashlib.sha1(body.encode()).hexdigest()[:8]
 html = f'''<!doctype html>
 <html lang="ko">
