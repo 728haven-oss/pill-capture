@@ -14,7 +14,8 @@ jobs:
         with: { node-version: '20' }
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK (러너 내장 사용 — setup-android@v3 는 2026-09 러너 이미지에서 라이선스 단계 실패)
+        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME/platforms" | tail -3
       - name: Build web (docs/)
         env: { RC_ANDROID_KEY: "${{ secrets.RC_ANDROID_KEY }}", RC_IOS_KEY: "${{ secrets.RC_IOS_KEY }}" }
         run: pip install pillow && python3 tools/build.py
