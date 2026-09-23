@@ -34,6 +34,21 @@ for a, b in [
     assert body.count(a) == 1, 'billing patch target not found: ' + a[:40]
     body = body.replace(a, b)
 print('billing', 'ON' if BILLING else 'OFF (free build)')
+# ── 로그인 + 가입 후 무료체험 (config/auth.json, src/auth.js) ─────
+#  enabled:false 면 아무 것도 주입하지 않음 → 기존 동작 그대로
+_ac = ROOT / 'config/auth.json'
+AUTH = json.loads(_ac.read_text(encoding='utf-8')) if _ac.exists() else {'enabled': False}
+AUTH.pop('_comment', None)
+AUTH_JS = ''
+if AUTH.get('enabled'):
+    AUTH['supabaseUrl'] = os.environ.get('SUPABASE_URL', AUTH.get('supabaseUrl', ''))
+    AUTH['supabaseAnonKey'] = os.environ.get('SUPABASE_ANON_KEY', AUTH.get('supabaseAnonKey', ''))
+    AUTH_JS = ('<script>window.__PC_AUTH=' + json.dumps(AUTH, ensure_ascii=False) + ';</script>\n<script>'
+               + (ROOT / 'src/auth.js').read_text(encoding='utf-8') + '</script>')
+    print('auth ON (trial %s days, providers %s)' % (AUTH.get('trialDays'), [k for k, v in (AUTH.get('providers') or {}).items() if v]))
+else:
+    print('auth OFF')
+body = body + '\n' + AUTH_JS if AUTH_JS else body
 ver = hashlib.sha1(body.encode()).hexdigest()[:8]
 html = f'''<!doctype html>
 <html lang="ko">
