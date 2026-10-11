@@ -34,7 +34,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 알약캡쳐" $P || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 알약캡쳐" $P
           # 카메라/사진 권한 문구 (없으면 심사 거절·촬영 시 크래시)
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 알약을 촬영해 개수를 세기 위해 카메라를 사용합니다." $P || true
-          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 동영상 촬영 시 iOS 카메라 화면이 마이크를 함께 사용합니다. 녹음된 소리는 저장·전송되지 않습니다." $P || true
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 동영상으로 알약 개수를 셀 때 마이크 접근이 필요합니다. 예를 들어 트레이에 펼친 알약을 동영상으로 촬영하면 iOS 카메라가 영상과 소리를 함께 기록하므로 마이크 권한을 요청합니다. 녹음된 소리는 개수 분석에 사용되지 않고 기기 밖으로 전송·저장·공유되지 않습니다." $P || true
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 저장된 알약 사진·영상을 불러와 개수를 세기 위해 사진 보관함에 접근합니다." $P || true
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string 촬영한 사진을 저장하기 위해 사용합니다." $P || true
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" $P || true
