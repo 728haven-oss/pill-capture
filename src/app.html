@@ -270,7 +270,7 @@ function analyze(){
 }
 
 // 배경 분리 → 연결요소 → 붙은 알약 분할 → 알약별 특징
-function segment(d, w, h){
+function segmentLegacy(d, w, h){ // 구버전(2026-10 개선 전). 더 이상 호출되지 않음
   const n = w*h;
   // 1) 배경색: 가장자리 픽셀의 중앙값
   const m = Math.max(4, Math.round(Math.min(w,h)*0.05));
@@ -336,6 +336,156 @@ function segment(d, w, h){
     if(c.length < refA*1.25){ pills.push(...features(c, d, w, refA)); continue; }
     const parts = splitBlob(c, fg, w, h, dt, refR);
     for(const p of parts) pills.push(...features(p, d, w, refA));
+  }
+  return pills;
+}
+// ───────── 2026-10: 알약이 아닌 구조물(유리 모서리·자·전선·책상 선) 제외
+// ── 연결요소 추출(4-이웃)
+function components(fg,w,h){
+  const n=w*h, label=new Int32Array(n), comps=[], stack=[];
+  for(let i=0;i<n;i++){
+    if(!fg[i]||label[i]) continue;
+    const px=[]; stack.push(i); label[i]=comps.length+1;
+    while(stack.length){ const p=stack.pop(); px.push(p);
+      const x=p%w, y=(p-x)/w;
+      if(x>0&&fg[p-1]&&!label[p-1]){label[p-1]=comps.length+1;stack.push(p-1);}
+      if(x<w-1&&fg[p+1]&&!label[p+1]){label[p+1]=comps.length+1;stack.push(p+1);}
+      if(y>0&&fg[p-w]&&!label[p-w]){label[p-w]=comps.length+1;stack.push(p-w);}
+      if(y<h-1&&fg[p+w]&&!label[p+w]){label[p+w]=comps.length+1;stack.push(p+w);}
+    }
+    comps.push(px);
+  }
+  return comps;
+}
+// ── 덩어리의 기하 특성(타원 근사 + 외접 사각형)
+function blobShape(px,w){
+  let sx=0,sy=0,sxx=0,syy=0,sxy=0,minx=1/0,maxx=-1,miny=1/0,maxy=-1;
+  const n=px.length;
+  for(const p of px){const x=p%w,y=(p-x)/w; sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
+    if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;}
+  const cx=sx/n, cy=sy/n;
+  const vx=sxx/n-cx*cx, vy=syy/n-cy*cy, vxy=sxy/n-cx*cy;
+  const tr=vx+vy, det=vx*vy-vxy*vxy, disc=Math.sqrt(Math.max(0,tr*tr/4-det));
+  const a=2*Math.sqrt(tr/2+disc), b=2*Math.sqrt(Math.max(1e-6,tr/2-disc));
+  return {n, a, b, elong:a/(b||1), fill:n/(Math.PI*a*b||1), bw:maxx-minx+1, bh:maxy-miny+1};
+}
+function pillLike(s,w,h,n,loose){
+  if(s.n > n*(loose?0.08:0.05)) return false;        // 화면의 5% 초과 = 구조물·배경
+  if(s.bw > w*0.70 || s.bh > h*0.70) return false;    // 화면을 가로지르는 긴 선
+  if(s.elong > (loose?5.0:4.2)) return false;         // 막대·테두리
+  if(s.fill < (loose?0.45:0.55)) return false;        // 속 빈 고리·굽은 선
+  return true;
+}
+// ── 거부된 큰 면(유리판·쟁반·책상) 안쪽을 국소 대비로 다시 훑어 알약만 건져냄
+function rescueBlob(c,d,w,h,n){
+  if(c.length < 400) return [];
+  let minx=1/0,maxx=-1,miny=1/0,maxy=-1;
+  const rr=[],gg=[],bb=[];
+  for(const p of c){const x=p%w,y=(p-x)/w;
+    if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+    const j=p*4; rr.push(d[j]); gg.push(d[j+1]); bb.push(d[j+2]);}
+  const med=a=>{a.sort((u,v)=>u-v); return a[a.length>>1];};
+  const br=med(rr), bg=med(gg), bb0=med(bb);          // 이 면 자체의 색 = 국소 배경
+  const bw=maxx-minx+1, bh=maxy-miny+1;
+  const inb=new Uint8Array(bw*bh), val=new Float32Array(bw*bh);
+  let maxd=0;
+  for(const p of c){const x=p%w-minx, y=((p-(p%w))/w)-miny, i=y*bw+x, j=p*4;
+    const dr=d[j]-br, dg=d[j+1]-bg, db=d[j+2]-bb0;
+    const lum=(dr+dg+db)/3, ch=Math.sqrt((dr-lum)**2+(dg-lum)**2+(db-lum)**2);
+    const v=Math.sqrt(lum*lum*0.55+ch*ch*2.2);
+    inb[i]=1; val[i]=v; if(v>maxd) maxd=v;}
+  if(maxd<14) return [];
+  const hist=new Float64Array(256), sc=255/(maxd||1);
+  for(let i=0;i<val.length;i++) if(inb[i]) hist[Math.min(255,(val[i]*sc)|0)]++;
+  let thr=otsu(hist,c.length)/sc;
+  thr=Math.max(thr,12);
+  let m=new Uint8Array(bw*bh);
+  for(let i=0;i<m.length;i++) m[i]= inb[i] && val[i]>thr ? 1:0;
+  m=dilate(erode(m,bw,bh),bw,bh);
+  fillHoles(m,bw,bh);
+  const out=[];
+  for(const sub of components(m,bw,bh)){
+    if(sub.length<40) continue;
+    const sh=blobShape(sub,bw);
+    if(sh.n > c.length*0.6) continue;                 // 면 전체가 다시 잡힌 경우
+    if(!pillLike(sh,w,h,n,false)) continue;
+    out.push(sub.map(i=>{const x=i%bw, y=(i-x)/bw; return (y+miny)*w + (x+minx);}));
+  }
+  return out;
+}
+// ── 마스크에서 알약답지 않은 성분을 지움
+function filterShapes(mask,w,h){
+  const n=w*h, out=new Uint8Array(n);
+  for(const c of components(mask,w,h)){
+    if(c.length<12) continue;
+    if(!pillLike(blobShape(c,w),w,h,n,false)) continue;
+    for(const p of c) out[p]=1;
+  }
+  return out;
+}
+function segment(d, w, h){
+  const n = w*h;
+  // 1) 배경색: 가장자리 픽셀의 중앙값
+  const m = Math.max(4, Math.round(Math.min(w,h)*0.05));
+  const rs=[],gs=[],bs=[];
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    if(x<m||y<m||x>=w-m||y>=h-m){ const i=(y*w+x)*4; rs.push(d[i]);gs.push(d[i+1]);bs.push(d[i+2]); }
+  }
+  const med = a => { a.sort((p,q)=>p-q); return a[a.length>>1]; };
+  const br=med(rs), bg=med(gs), bb=med(bs);
+  // 2) 배경과의 거리 → Otsu 임계값
+  const dist = new Float32Array(n);
+  let maxd=0;
+  for(let i=0;i<n;i++){
+    const j=i*4, dr=d[j]-br, dg=d[j+1]-bg, db=d[j+2]-bb;
+    // 색상 차이에 가중(밝기만 다른 그림자에 덜 민감)
+    const lum = (dr+dg+db)/3;
+    const chroma = Math.sqrt(((dr-lum)**2+(dg-lum)**2+(db-lum)**2));
+    const v = Math.sqrt(lum*lum*0.55 + chroma*chroma*2.2);
+    dist[i]=v; if(v>maxd) maxd=v;
+  }
+  const hist = new Float64Array(256); const sc = 255/(maxd||1);
+  for(let i=0;i<n;i++) hist[Math.min(255, (dist[i]*sc)|0)]++;
+  let thr = otsu(hist, n)/sc;
+  thr = Math.max(thr, 18); // 너무 낮은 임계값 방지(균일 배경 노이즈)
+  let fg = new Uint8Array(n);
+  for(let i=0;i<n;i++) fg[i] = dist[i]>thr ? 1:0;
+  // 3) 형태학: 열기(노이즈 제거) 후 닫기(구멍 메움)
+  fg = dilate(erode(fg,w,h),w,h);
+  fg = erode(dilate(fg,w,h),w,h);
+  fillHoles(fg,w,h);
+  // 3b) 배경과 색이 비슷한 알약(흰 알약 + 흰 배경): 윤곽선(기울기) 기반 마스크를 합침
+  const edge = filterShapes(edgeMask(d, w, h), w, h);
+  for(let i=0;i<n;i++) if(edge[i]) fg[i]=1;
+  // 4) 연결요소
+  const comps = components(fg,w,h);
+  // 5) 크기 + 모양 필터: 작은 잡티와 알약이 아닌 구조물(유리 모서리·자·전선·책상 선)을 제외
+  if(!comps.length) return [];
+  const minA = Math.max(30, n*0.00025);
+  const big=[];
+  for(const c of comps){
+    if(c.length<minA) continue;
+    const sh=blobShape(c,w);
+    if(pillLike(sh,w,h,n,false)){ big.push({px:c, s:sh}); continue; }
+    // 알약이 아닌 큰 면이면 그 안에서 알약만 다시 찾아본다
+    for(const sub of rescueBlob(c,d,w,h,n)) big.push({px:sub, s:blobShape(sub,w)});
+  }
+  if(!big.length) return [];
+  // 기준 알약 면적: 큰 것들 중 하한 40% 분위(뭉친 덩어리 영향 줄임)
+  const a2 = big.map(o=>o.px.length).sort((a,b)=>a-b);
+  const refA = a2[Math.floor(a2.length*0.4)];
+  const refR = Math.sqrt(refA/Math.PI);
+  // 6) 붙은 알약 분할: 거리변환 봉우리. 쪼갠 조각도 모양을 다시 확인
+  const pills=[];
+  const dt = new Float32Array(n);
+  for(const o of big){
+    const c = o.px;
+    if(c.length < refA*1.25){ pills.push(...features(c, d, w, refA)); continue; }
+    const parts = splitBlob(c, fg, w, h, dt, refR);
+    for(const p of parts){
+      if(parts.length>1 && !pillLike(blobShape(p,w),w,h,n,true)) continue;
+      pills.push(...features(p, d, w, refA));
+    }
   }
   return pills;
 }
