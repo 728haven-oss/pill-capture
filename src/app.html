@@ -63,6 +63,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
 .summary .kinds{font-size:13px;color:var(--ink-2);text-align:right}
 .summary .kinds b{color:var(--ink);font-weight:600}
 .summary .hint{grid-column:1/-1;font-size:12.5px;color:var(--ink-3);margin-top:-4px}
+.summary .conf{grid-column:1/-1;font-size:12.5px;color:var(--ink-2);border-radius:10px;padding:7px 10px;background:var(--accent-soft)}
+.summary .conf.mid{background:var(--warn-soft)}
+.summary .conf.lo{background:var(--warn-soft);color:var(--warn)}
+.summary .conf b{font-weight:700}
 
 .groups{display:flex;flex-direction:column;gap:8px}
 .group{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;background:var(--surface);border-radius:14px;padding:10px 12px;box-shadow:var(--shadow);border:2px solid transparent;cursor:pointer;transition:border-color .15s}
@@ -77,6 +81,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
 .group .meta .desc{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .group .count{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right;letter-spacing:-.02em}
 .group .count.adj{color:var(--warn)}
+.group .adjust .exclude{font-size:11.5px;width:auto;padding:0 8px;color:var(--ink-3)}
+.warn-tag{display:inline-block;font-size:10.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:6px;padding:1px 6px;margin-left:4px;vertical-align:middle}
 .group .adjust{display:flex;flex-direction:column;gap:4px}
 .group .adjust button{width:30px;height:24px;border-radius:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font:inherit;font-weight:600;line-height:1;cursor:pointer}
 .group .adjust button:active{background:var(--accent-soft)}
@@ -95,6 +101,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
 .dock{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--bg) 70%,transparent);padding:10px 16px 14px}
 .dock .row{max-width:560px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px}
 .dock .row.live{grid-template-columns:1fr 1fr}
+.dock .row.capture{grid-template-columns:2fr 1fr}
 .dock button.stop{background:var(--bad);border-color:var(--bad);color:#fff}
 .live-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--accent-soft);color:var(--ink);border-radius:12px;padding:9px 12px;font-size:13px}
 .live-bar b{color:var(--accent)}
@@ -163,6 +170,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
   <div class="summary" id="summary">
     <div class="total"><span id="total">0</span><small>정</small></div>
     <div class="kinds"><b id="kinds">0</b>종류 인식</div>
+    <div class="conf" id="conf" hidden></div>
     <div class="hint" id="hint">종류 줄을 누르면 사진에서 강조됩니다. 잘못 나뉜 종류는 <b>합치기</b>로 하나로 묶을 수 있습니다.</div>
   </div>
 
@@ -178,7 +186,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
     <button class="btn" id="btn-copy">결과 복사</button>
   </div>
 
-  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
+  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>촬영</b>은 한 번에 3장을 연속으로 찍고 사진마다 여러 조건으로 분석해 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
 </div>
 
 <div class="paywall" id="paywall" hidden>
@@ -206,6 +214,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
   <div class="row" id="dock-row">
     <button class="primary" id="btn-live"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 11l5-3v8l-5-3z"/></svg>실시간</button>
     <button id="btn-freeze" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg>이 장면 고정</button>
+    <button class="primary" id="btn-shoot" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg>찍기 (3장 연속)</button>
     <button class="stop" id="btn-stop" hidden>종료</button>
     <button id="btn-camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>촬영</button>
     <button id="btn-file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>사진·영상</button>
@@ -225,7 +234,7 @@ const photo = $('photo'), overlay = $('overlay');
 const pctx = photo.getContext('2d', {willReadFrequently:true});
 const octx = overlay.getContext('2d');
 const PALETTE = ['#FF7A1A','#2E7BFF','#E0369A','#7ED321','#00C2D1','#FFD400','#9B51E0','#FF3B30','#34C759','#A26A2E'];
-let state = { pills:[], groups:[], mode:'auto', selected:-1, merging:false, mergePick:new Set(), source:null, adjust:{} };
+let state = { pills:[], groups:[], mode:'auto', selected:-1, merging:false, mergePick:new Set(), source:null, adjust:{}, conf:null };
 
 // ───────────────────────── 이미지 로드
 function loadFile(file){
@@ -250,27 +259,71 @@ function setImage(img, label){
 }
 
 // ───────────────────────── 핵심 분석
-function analyze(){
-  const t0 = performance.now();
+// 앙상블: 같은 사진(또는 연속 촬영 여러 장)을 서로 다른 조건(축소 배율·배경 임계값)으로 여러 번 분석해
+// 가장 많이 나온 개수를 채택하고, 결과가 얼마나 일치했는지를 신뢰도로 보여준다.
+const VARIANTS_PHOTO = [[1,1],[1,0.85],[1,1.2],[0.85,1],[0.85,1.2],[0.7,1],[0.7,0.85]]; // [배율, 임계값 배수] — 사진 1장
+const VARIANTS_BURST = [[1,1],[0.85,0.85],[0.85,1.2]];                                  // 연속 촬영 3장 × 3조건
+function runOnce(src, scale, thrMul){
+  const W=src.width, H=src.height; let d,w,h;
+  if(scale<1){ w=Math.round(W*scale); h=Math.round(H*scale); const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d',{willReadFrequently:true}); cx.drawImage(src,0,0,w,h); d=cx.getImageData(0,0,w,h).data; }
+  else { w=W; h=H; d=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data; }
+  const pills=segment(d,w,h,{thrMul});
+  if(scale<1){ const k=1/scale; for(const p of pills){ p.cx*=k; p.cy*=k; p.a*=k; p.b*=k; p.area*=k*k; } } // 좌표·면적을 원래 크기로
+  const groups = state.mode==='single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
+  groups.sort((a,b)=>b.length-a.length);
+  const res={pills,groups,scale,thrMul}; res.total=totalOf(res); return res;
+}
+function pickResult(runs){
+  const totals=runs.map(r=>r.total); const sorted=[...totals].sort((a,b)=>a-b); const median=sorted[sorted.length>>1];
+  const freq=new Map(); for(const t of totals) freq.set(t,(freq.get(t)||0)+1);
+  const base=(runs.find(r=>r.scale===1 && r.thrMul===1)||runs[0]).total;   // 동률이면 기본 조건(원본 크기·기본 임계값) 결과 우선, 그다음 중앙값에 가까운 쪽
+  let mode=null, best=-1;
+  for(const [t,c] of freq){ if(c>best || (c===best && Math.abs(t-median)<Math.abs(mode-median))){ best=c; mode=t; } }
+  if(best>=2 && freq.get(base)===best) mode=base;
+  const tol=Math.max(1, Math.round(mode*0.05));                      // 5% 이내면 일치로 본다
+  const agree=totals.filter(t=>Math.abs(t-mode)<=tol).length;
+  const chosen = runs.find(r=>r.total===mode && r.scale===1 && r.thrMul===1) || runs.find(r=>r.total===mode);
+  return {chosen, mode, conf:agree/runs.length, agree, n:runs.length, min:sorted[0], max:sorted[sorted.length-1]};
+}
+let analyzeSeq=0;
+function analyze(frames){
+  const seq=++analyzeSeq, t0=performance.now();
+  const srcs = frames && frames.length ? frames : [photo];
+  const variants = srcs.length>1 ? VARIANTS_BURST : VARIANTS_PHOTO;
+  const jobs=[]; srcs.forEach((f,fi)=>variants.forEach(([s,t])=>jobs.push([f,fi,s,t])));
+  const runs=[];
   setChip('분석 중…', true);
-  requestAnimationFrame(() => {
-    try{
-      const w = photo.width, h = photo.height;
-      const data = pctx.getImageData(0,0,w,h).data;
-      const pills = segment(data, w, h);
-      state.pills = pills;
-      state.groups = state.mode === 'single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
-      state.groups.sort((a,b)=>b.length-a.length);
-      state.adjust = {};
-      render();
-      const ms = Math.round(performance.now()-t0);
-      setChip(state.source || '사진'); $('chip-time').hidden=false; $('chip-time').textContent = `${w}×${h} · ${ms}ms`;
-    }catch(e){ console.error(e); setChip('분석 실패: '+e.message); }
+  return new Promise(resolve=>{
+    const finish=()=>{
+      try{
+        if(!runs.length) throw new Error('분석 결과 없음');
+        const pick=pickResult(runs); const r=pick.chosen;
+        if(srcs[r.frame]!==photo){ const f=srcs[r.frame]; photo.width=f.width; photo.height=f.height; overlay.width=f.width; overlay.height=f.height; pctx.drawImage(f,0,0); }
+        state.pills=r.pills; state.groups=r.groups; state.adjust={}; state.conf=pick; state.selected=-1;
+        render();
+        const ms=Math.round(performance.now()-t0);
+        setChip(state.source||'사진'); $('chip-time').hidden=false; $('chip-time').textContent=`${photo.width}×${photo.height} · ${ms}ms · ${pick.n}회 분석`;
+      }catch(e){ console.error(e); setChip('분석 실패: '+e.message); }
+      resolve(state.conf);
+    };
+    const step=k=>{
+      if(seq!==analyzeSeq) return resolve(null);          // 새 분석이 시작되면 중단
+      if(k>=jobs.length) return finish();
+      const [f,fi,s,t]=jobs[k];
+      try{ const r=runOnce(f,s,t); r.frame=fi; runs.push(r); }catch(e){ console.error(e); }
+      setChip(`분석 중… ${k+1}/${jobs.length}`, true);
+      setTimeout(()=>step(k+1), 0);
+    };
+    requestAnimationFrame(()=>step(0));
   });
 }
 
 // 배경 분리 → 연결요소 → 붙은 알약 분할 → 알약별 특징
-function segment(d, w, h){
+let SEGDBG=null; // 디버그: 배열을 넣으면 덩어리별 판정 기록
+function segment(d, w, h, opt){
+  opt = opt || {};
+  const dbg=(o,why,extra)=>{ if(SEGDBG) SEGDBG.push(Object.assign({n:o.s.n,elong:+o.s.elong.toFixed(2),fill:+o.s.fill.toFixed(2),bw:o.s.bw,bh:o.s.bh,why},extra||{})); };
+  const thrMul = opt.thrMul || 1;   // 앙상블: 배경 임계값 변화(0.85·1·1.2)
   const n = w*h;
   // 1) 배경색: 가장자리 픽셀의 중앙값
   const m = Math.max(4, Math.round(Math.min(w,h)*0.05));
@@ -294,7 +347,7 @@ function segment(d, w, h){
   const hist = new Float64Array(256); const sc = 255/(maxd||1);
   for(let i=0;i<n;i++) hist[Math.min(255, (dist[i]*sc)|0)]++;
   let thr = otsu(hist, n)/sc;
-  thr = Math.max(thr, 18); // 너무 낮은 임계값 방지(균일 배경 노이즈)
+  thr = Math.max(thr*thrMul, 18); // 너무 낮은 임계값 방지(균일 배경 노이즈)
   let fg = new Uint8Array(n);
   for(let i=0;i<n;i++) fg[i] = dist[i]>thr ? 1:0;
   // 3) 형태학: 열기(노이즈 제거) 후 닫기(구멍 메움)
@@ -310,11 +363,18 @@ function segment(d, w, h){
   const minA = minPillArea(w,h);
   const cand = comps.filter(c=>c.length>=minA).map(c=>({px:c, s:blobShape(c,w)}));
   if(!cand.length) return [];
-  // 5) 기준 알약 면적: '한 알'로 보이는 것들의 하한 40% 분위. 없으면 전체 기준(기존 방식)
-  const singles = cand.filter(o=>pillLike(o.s,w,h,n,false)).map(o=>o.px.length).sort((a,b)=>a-b);
+  // 5) 기준 알약 면적: '한 알'로 보이는 것들의 하한 40% 분위. 너무 작은 조각(자 눈금·반사 잡티)은 기준에서 제외.
+  //    기준이 없거나(전부 한 더미) 믿기 어려우면(낱알 3개 미만) 분할 결과로 다시 추정해 수렴시킨다(자기 일관성).
+  const sizeOK = o => o.px.length >= Math.max(minA*3, n*0.0005);
+  const singlesA = cand.filter(o=>sizeOK(o) && pillLike(o.s,w,h,n,false)).map(o=>o.px.length).sort((a,b)=>a-b);
   const allA = cand.map(o=>o.px.length).sort((a,b)=>a-b);
-  const hasRef = singles.length>0;
-  const refA = hasRef ? singles[Math.floor(singles.length*0.4)] : allA[Math.floor(allA.length*0.4)];
+  const hasRef = singlesA.length>0;
+  let refA = hasRef ? singlesA[Math.floor(singlesA.length*0.4)] : allA[Math.floor(allA.length*0.4)];
+  // 확실한 낱알들의 대표색(채널별 중앙값): 더미 분할 조각의 색 검증 기준
+  let refRGB=null;
+  { const cs=cand.filter(o=>sizeOK(o) && pillLike(o.s,w,h,n,false)).map(o=>features(o.px,d,w,1)[0].rgb);
+    if(cs.length>=2){ const m=k=>{const a=cs.map(c=>c[k]).sort((x,y)=>x-y); return a[a.length>>1];}; refRGB=[m(0),m(1),m(2)]; } }
+  const pass = (refA) => {
   const refR = Math.sqrt(refA/Math.PI);
   // 6) 덩어리별 판정
   //    - 한 알 모양 → 그대로
@@ -324,7 +384,7 @@ function segment(d, w, h){
   const dt = new Float32Array(n);
   for(const o of cand){
     const c=o.px;
-    if(hasRef && c.length < refA*1.25){ if(pillLike(o.s,w,h,n,true)){ const f=features(c, d, w, refA); if(pillLike(o.s,w,h,n,false)) f[0].single=true; pills.push(...f); } continue; }
+    if(hasRef && c.length < refA*1.25){ if(pillLike(o.s,w,h,n,true)){ const f=features(c, d, w, refA); if(pillLike(o.s,w,h,n,false) && sizeOK(o)) f[0].single=true; pills.push(...f); dbg(o,'small-ok'); } else dbg(o,'small-drop'); continue; }
     if(!hasRef && pillLike(o.s,w,h,n,false)){ pills.push(...features(c, d, w, refA)); continue; }
     // 기준 알약보다 큰 덩어리는 먼저 목(neck) 기준으로 나눠 본다(붙은 알약)
     let parts = splitBlob(c, fg, w, h, dt, refR);
@@ -332,16 +392,19 @@ function segment(d, w, h){
     // 화면 테두리 두 변 이상에 닿은 큰 덩어리는 책상·쟁반 같은 배경 구조물 → 더미 분할 대상에서 제외
     const borders=(o.s.minx<=0)+(o.s.maxx>=w-1)+(o.s.miny<=0)+(o.s.maxy>=h-1);
     const peakSplit=new Set();
-    if(hasRef && borders<2){ const more=[]; for(const p of parts){ if(p.length > refA*2.2 && !lineLike(blobShape(p,w),w,h)){ let qs=splitByPeaks(p,d,w,h,refR,[br,bg,bb]); if(qs.length>1) qs=sameColorParts(qs,d,w); if(qs.length>1) for(const q of qs){ peakSplit.add(q); more.push(q); } else more.push(p); } else more.push(p); } parts=more; }
+    if(hasRef && borders<2){ const more=[]; for(const p of parts){ if(p.length > refA*2.2 && !lineLike(blobShape(p,w),w,h)){ let qs=splitByPeaks(p,d,w,h,refR,[br,bg,bb]); if(qs.length>1) qs=sameColorParts(qs,d,w,refRGB); if(qs.length>1) for(const q of qs){ peakSplit.add(q); more.push(q); } else more.push(p); } else more.push(p); } parts=more; }
+    dbg(o,'big',{refA:Math.round(refA),borders,parts:parts.length,peak:peakSplit.size});
     if(parts.length>1){
       // 조각이 알약(또는 몇 알이 겹친 덩어리) 모양이면 인정. 기준 알약의 6배를 넘는 조각은 알약이 아님(책상·그림자)
       const good = parts.filter(p=>pillLike(blobShape(p,w),w,h,n,true) && (!hasRef || p.length <= refA*6));
+      dbg(o,'parts',{good:good.length, bad:parts.length-good.length, areas:parts.map(p=>Math.round(p.length/refA*10)/10).join(',')});
       if(good.length >= 1){
         // 밝기 봉우리로 나뉜 조각은 봉우리 하나 = 알약 하나. 조각 면적 중앙값의 2.2배 이하이면 정확히 1정으로 센다(면적 추정의 과대 집계 방지)
         const pa=good.filter(p=>peakSplit.has(p)).map(p=>p.length).sort((x,y)=>x-y); const pmed=pa.length?pa[pa.length>>1]:0;
         for(const p of good){
           const f=features(p, d, w, refA);
           f[0].relArea=Math.min(f[0].relArea, 1.6);   // 같은 색의 낱알과 한 종류로 묶이게
+          f[0].piece=true;
           if(peakSplit.has(p) && p.length <= pmed*2.2 && p.length <= refA*1.9) f[0].fixed=1;   // 기준 알약의 1.9배를 넘으면 두 알이 붙은 조각일 수 있어 면적 추정에 맡김
           pills.push(...f);
         }
@@ -349,18 +412,35 @@ function segment(d, w, h){
       }
     } else if(pillLike(o.s,w,h,n,false) && (!hasRef || c.length <= refA*3)){ pills.push(...features(c, d, w, refA)); continue; } // 못 나눴지만 한 알 모양(큰 알약·겹친 두 알) → 면적으로 추정. 기준보다 3배 넘게 크면 알약이 아님
     const rescued = rescueBlob(c,d,w,h,n);
+    dbg(o,'rescue',{got:rescued.length});
     if(rescued.length){ for(const sub of rescued) pills.push(...features(sub, d, w, refA)); continue; }
     // 화면에 '한 알'짜리 기준이 하나도 없고(알약이 전부 한 더미로 뭉친 경우) 선·면도 아니면
     // 한 물체(1정)로 남겨 사용자가 +/- 로 보정하게 둔다. 기준 알약이 있는 장면에서는 버린다(책상 위 물건 오인 방지).
     if(!hasRef && o.s.fill>=0.5 && o.s.elong<=6 && o.s.n <= n*0.25){ const f=features(c, d, w, refA); f[0].relArea=1; pills.push(...f); }
   }
+  return pills;
+  };
+  // 자기 일관성: 낱알 기준이 빈약하면(3개 미만) 분할된 1정 조각들의 면적 중앙값으로 기준을 다시 잡고 한 번 더 돈다(최대 3회)
+  let pills = pass(refA);
+  if(hasRef){
+    for(let it=0; it<3; it++){
+      if(singlesA.length>=3) break;                                    // 낱알이 충분하면 그 기준을 믿는다
+      const est=pills.filter(p=>p.fixed===1).map(p=>p.area*0.8).sort((a,b)=>a-b);   // 봉우리 조각은 틈 픽셀을 포함해 알약보다 크므로 0.8배
+      if(est.length<4) break;
+      const ref2=est[est.length>>1];
+      if(SEGDBG) SEGDBG.push({why:'refit', it, refA:Math.round(refA), ref2:Math.round(ref2), n:est.length});
+      if(Math.abs(ref2-refA) < refA*0.25) break;
+      refA=ref2; pills=pass(refA);
+    }
+  }
   // 색 일관성: 확실한 낱알(single)과 비슷한 색의 후보만 남긴다. 알약은 종류별로 색이 같고, 책상·유리 모서리·그림자 조각은 어느 낱알과도 색이 다르다.
   const sure=pills.filter(p=>p.single);
   if(sure.length>=2){
-    const near=(p,q)=>{const a=p.rgb,b=q.rgb; return Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2)<=70;};
+    const near=(p,q)=>colorDist(p.rgb,q.rgb)<=60;
     // 확실한 낱알 면적 중앙값의 30% 미만인 조각은 잡티(유리 반사·그림자 조각)
     const sa=sure.map(p=>p.area).sort((x,y)=>x-y)[sure.length>>1];
     const kept=pills.filter(p=>p.area >= sa*0.3 && (p.single || sure.some(s=>near(p,s))));
+    if(SEGDBG) SEGDBG.push({why:'colorfilter', before:pills.length, after:kept.length, singles:sure.length, sa:Math.round(sa)});
     // 나뉜 조각의 모양(길쭉함·크기)은 임의적이므로 종류 묶기에는 낱알의 대표 모양을 쓴다 → 같은 색이면 같은 종류로 묶임
     const el=sure.map(p=>p.elong).sort((x,y)=>x-y)[sure.length>>1];
     for(const p of kept) if(!p.single){ p.elong=el; p.relArea=1; }
@@ -508,17 +588,17 @@ function splitByPeaks(c, d, w, h, refR, bgc){
   let g=v; for(let t=0;t<2;t++) g=blur(g);
   // 국소 최대 + 비최대 억제
   const nms=Math.max(2, Math.round(refR*1.3));
-  let med=0; { const arr=[]; for(let i=0;i<g.length;i+=3) if(inb[i]) arr.push(g[i]); arr.sort((a,b)=>a-b); med=arr[arr.length>>1]||0; }
+  let med=0, p90=0; { const arr=[]; for(let i=0;i<g.length;i+=3) if(inb[i]) arr.push(g[i]); arr.sort((a,b)=>a-b); med=arr[arr.length>>1]||0; p90=arr[Math.floor(arr.length*0.9)]||0; }
   const cand=[];
   for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x; if(!inb[i]) continue; const val=g[i]; if(val<med*0.6) continue;
     if(val>=g[i-1]&&val>=g[i+1]&&val>=g[i-bw]&&val>=g[i+bw]&&val>=g[i-bw-1]&&val>=g[i-bw+1]&&val>=g[i+bw-1]&&val>=g[i+bw+1]) cand.push([val,x,y]);}
   cand.sort((a,b)=>b[0]-a[0]);
   const peaks=[];
   for(const [val,x,y] of cand){ let ok=true; for(const q of peaks){ if((q[0]-x)**2+(q[1]-y)**2 < nms*nms){ok=false;break;} } if(ok) peaks.push([x,y,val]); }
-  if(med < 25) return [c];              // 배경과 대비가 약한 덩어리(흰 알약·흰 배경)는 밝기 봉우리를 믿을 수 없음 → 실루엣 분할 결과 유지
-  if(med < 25) return [c];              // 배경과 대비가 약한 덩어리(흰 알약·흰 배경)는 밝기 봉우리를 믿을 수 없음 → 실루엣 분할 결과 유지
+  if(SEGDBG) SEGDBG.push({why:'peaks', n:c.length, med:Math.round(med), p90:Math.round(p90), peaks:peaks.length, need:Math.round(c.length/(Math.PI*refR*refR*8))});
+  if(p90 < 25) return [c];              // 배경과 대비가 약한 덩어리(흰 알약·흰 배경)는 밝기 봉우리를 믿을 수 없음 → 실루엣 분할 결과 유지
   if(peaks.length<=1) return [c];
-  if(peaks.length < c.length/(Math.PI*refR*refR*4)) return [c];   // 면적에 비해 봉우리가 너무 적음 = 알약 더미가 아님(책상·그림자)
+  if(peaks.length < c.length/(Math.PI*refR*refR*8)) return [c];   // 면적에 비해 봉우리가 너무 적음 = 알약 더미가 아님(책상·그림자). 조각은 뒤에서 모양·크기로 다시 걸러지므로 느슨하게
   const own=new Int16Array(bw*bh).fill(-1);
   for(const p of c){const x=p%w-minx+1,y=((p-(p%w))/w)-miny+1; let bi=0,bd=1e12;
     for(let k=0;k<peaks.length;k++){const dd=(peaks[k][0]-x)**2+(peaks[k][1]-y)**2; if(dd<bd){bd=dd;bi=k;}} own[y*bw+x]=bi;}
@@ -548,14 +628,18 @@ function rectFill(px, w){
 }
 // ── 한 더미는 한 가지 약: 봉우리로 나뉜 조각들 중 색이 대표색에서 멀리 벗어난 것은 알약이 아니다(자·책상·유리 모서리).
 //    벗어난 조각이 40%를 넘으면 애초에 알약 더미가 아니므로 분할을 취소한다.
-function sameColorParts(parts, d, w){
+// 색 거리: 밝기 차이는 약하게(그림자 속 알약), 색조 차이는 강하게(유리·책상·다른 종류) 반영
+function colorDist(a,b){ const la=(a[0]+a[1]+a[2])/3, lb=(b[0]+b[1]+b[2])/3; let c=0; for(let k=0;k<3;k++){ const t=(a[k]-la)-(b[k]-lb); c+=t*t; } return Math.sqrt((la-lb)*(la-lb)*0.25 + c*1.5); }
+function sameColorParts(parts, d, w, refRGB){
   const cols=parts.map(px=>{ const rr=[],gg=[],bb=[]; for(let i=0;i<px.length;i+=2){const j=px[i]*4; rr.push(d[j]);gg.push(d[j+1]);bb.push(d[j+2]);}
     const m=a=>{a.sort((x,y)=>x-y);return a[a.length>>1];}; return [m(rr),m(gg),m(bb)]; });
   const m=k=>{const a=cols.map(c=>c[k]).sort((x,y)=>x-y); return a[a.length>>1];};
-  const ref=[m(0),m(1),m(2)];
+  // 기준색: 화면의 확실한 낱알 색(있으면). 없으면 조각들의 중앙색
+  const ref=refRGB || [m(0),m(1),m(2)];
   const keep=[]; let drop=0;
-  parts.forEach((px,i)=>{ const c=cols[i]; const dist=Math.sqrt((c[0]-ref[0])**2+(c[1]-ref[1])**2+(c[2]-ref[2])**2); if(dist<=55) keep.push(px); else drop++; });
-  if(drop > parts.length*0.4) return [parts.flat()];
+  parts.forEach((px,i)=>{ const c=cols[i]; if(colorDist(c,ref)<=55) keep.push(px); else drop++; });
+  if(!refRGB && drop > parts.length*0.4) return [parts.flat()];   // 기준색이 조각들 자체에서 나온 경우 절반 가까이 버려지면 기준이 틀린 것 → 분할 취소
+  if(SEGDBG) SEGDBG.push({why:'samecolor', parts:parts.length, keep:keep.length, ref:ref.map(Math.round).join('/')});
   return keep;
 }
 function otsu(hist,total){
@@ -690,9 +774,14 @@ function cluster(pills, sens){
 // ───────────────────────── 렌더링
 function groupColor(gi){ return PALETTE[gi%PALETTE.length]; }
 // 같은 종류 안에서의 면적 중앙값을 1정으로 보고, 그보다 훨씬 큰 덩어리는 여러 정으로 추정
-function groupUnit(gi){ const g=state.groups[gi]; const sing=g.map(i=>state.pills[i]).filter(p=>p.single).map(p=>p.area).sort((a,b)=>a-b); if(sing.length>=2) return sing[sing.length>>1]; /* 확실한 낱알이 있으면 그 중앙값이 1정 */ const as=g.map(i=>state.pills[i].area).sort((a,b)=>a-b); return as.length>=3 ? as[Math.floor(as.length*0.4)] : null; }
-function estCount(gi,i){ const p=state.pills[i]; const u=groupUnit(gi); const r = u ? p.area/u : p.relArea; if(p.fixed) return p.fixed; return Math.min(30, Math.max(1, Math.round(r - 0.15))); }
-function groupCount(gi){ const g=state.groups[gi]; let c=0; for(const i of g){ c+=estCount(gi,i); } return c + (state.adjust[gi]||0); }
+// 결과(res={pills,groups})에 대해 동작하는 순수 함수들. state 기반 래퍼는 아래.
+function unitOf(res,g){ const sing=g.map(i=>res.pills[i]).filter(p=>p.single).map(p=>p.area).sort((a,b)=>a-b); if(sing.length>=2) return sing[sing.length>>1]; /* 확실한 낱알이 있으면 그 중앙값이 1정 */ const as=g.map(i=>res.pills[i].area).sort((a,b)=>a-b); return as.length>=3 ? as[Math.floor(as.length*0.4)] : null; }
+function countOf(res,g,i,u){ const p=res.pills[i]; const r = u ? p.area/u : p.relArea; if(p.fixed) return p.fixed; return Math.min(30, Math.max(1, Math.round(r - 0.15))); }
+function groupTotalOf(res,g){ const u=unitOf(res,g); let c=0; for(const i of g) c+=countOf(res,g,i,u); return c; }
+function totalOf(res){ return res.groups.reduce((s,g)=>s+groupTotalOf(res,g),0); }
+function groupUnit(gi){ return unitOf(state, state.groups[gi]); }
+function estCount(gi,i){ return countOf(state, state.groups[gi], i, groupUnit(gi)); }
+function groupCount(gi){ return groupTotalOf(state, state.groups[gi]) + (state.adjust[gi]||0); }
 function describe(gi){
   const g=state.groups[gi]; const ps=g.map(i=>state.pills[i]);
   const avg=k=>ps.reduce((s,p)=>s+p[k],0)/ps.length;
@@ -707,6 +796,16 @@ function render(){
   drawOverlay(); renderGroups();
   const total = state.groups.reduce((s,_,i)=>s+groupCount(i),0);
   $('total').textContent = total; $('kinds').textContent = state.groups.length;
+  renderConf();
+}
+function renderConf(){
+  const c=state.conf, el=$('conf');
+  if(!c || !state.pills.length){ el.hidden=true; return; }
+  const lvl = c.conf>=0.75?'높음':c.conf>=0.5?'보통':'낮음';
+  el.hidden=false; el.className='conf '+(c.conf>=0.75?'hi':c.conf>=0.5?'mid':'lo');
+  el.innerHTML = (c.min===c.max ? `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 모두 ${c.mode}정`
+    : `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 중 ${c.agree}회 일치 (범위 ${c.min}~${c.max}정)`)
+    + (c.conf<0.5 ? ' · 알약을 살짝 흩고 다시 촬영해 보세요' : '');
 }
 function drawOverlay(){
   const w=overlay.width,h=overlay.height; octx.clearRect(0,0,w,h);
@@ -745,14 +844,17 @@ function renderGroups(){
     const rep=state.pills[g[0]]; const r=Math.max(rep.a,rep.b)*1.35;
     const cc=c.getContext('2d'); cc.drawImage(photo, rep.cx-r, rep.cy-r, 2*r, 2*r, 0,0,88,88);
     const meta=document.createElement('div'); meta.className='meta';
-    meta.innerHTML=`<div class="name"><span class="dot" style="background:${col}"></span>종류 ${gi+1}</div><div class="desc">${describe(gi)} · ${g.length}개 감지</div>`;
+    const noSingle = state.groups.length>1 && !g.some(i=>state.pills[i].single) && state.groups.some(h=>h.some(i=>state.pills[i].single));
+    meta.innerHTML=`<div class="name"><span class="dot" style="background:${col}"></span>종류 ${gi+1}${noSingle?' <span class="warn-tag">확인 필요</span>':''}</div><div class="desc">${describe(gi)} · ${g.length}개 감지${noSingle?' · 낱알이 없어 자·유리 등 다른 물체일 수 있습니다':''}</div>`;
     const cnt=document.createElement('div'); cnt.className='count'+(state.adjust[gi]?' adj':''); cnt.textContent=groupCount(gi);
     const adj=document.createElement('div'); adj.className='adjust';
     const up=document.createElement('button'); up.textContent='+'; up.setAttribute('aria-label',`종류 ${gi+1} 개수 1 늘리기`);
     const dn=document.createElement('button'); dn.textContent='−'; dn.setAttribute('aria-label',`종류 ${gi+1} 개수 1 줄이기`);
     up.onclick=e=>{e.stopPropagation(); state.adjust[gi]=(state.adjust[gi]||0)+1; render();};
     dn.onclick=e=>{e.stopPropagation(); if(groupCount(gi)>0){state.adjust[gi]=(state.adjust[gi]||0)-1; render();}};
-    adj.append(up,dn);
+    const ex=document.createElement('button'); ex.textContent='제외'; ex.className='exclude'; ex.setAttribute('aria-label',`종류 ${gi+1} 집계에서 제외`); ex.title='이 종류는 알약이 아님 (집계에서 제외)';
+    ex.onclick=e=>{e.stopPropagation(); excludeGroup(gi);};
+    adj.append(up,dn,ex);
     el.append(sw,meta,cnt,adj);
     el.onclick=()=>onGroupTap(gi);
     el.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault(); onGroupTap(gi);} };
@@ -771,6 +873,14 @@ function setChip(t,busy){ const c=$('chip-state'); c.textContent=t; c.classList.
 // ───────────────────────── 합치기
 function startMerge(){ if(state.groups.length<2) return; state.merging=true; state.mergePick.clear(); state.selected=-1; $('merge-bar').hidden=false; $('merge-apply').disabled=true; $('merge-msg').textContent='합칠 종류를 두 개 이상 선택하세요'; render(); }
 function cancelMerge(){ state.merging=false; state.mergePick.clear(); $('merge-bar').hidden=true; renderGroups(); }
+function excludeGroup(gi){
+  if(state.groups.length<=1 && !state.pills.length) return;
+  const g=state.groups[gi]; const drop=new Set(g);
+  // 해당 알약들을 제거하고 나머지로 인덱스를 다시 매김(보정값은 유지)
+  const map=new Map(); const pills=[]; state.pills.forEach((p,i)=>{ if(!drop.has(i)){ map.set(i,pills.length); pills.push(p); } });
+  const groups=[], adjust={}; state.groups.forEach((h,i)=>{ if(i===gi) return; adjust[groups.length]=state.adjust[i]||0; groups.push(h.map(j=>map.get(j))); });
+  state.pills=pills; state.groups=groups; state.adjust=adjust; state.selected=-1; cancelMerge(); render();
+}
 function applyMerge(){
   const picks=[...state.mergePick].sort((a,b)=>a-b); if(picks.length<2) return;
   const merged=[].concat(...picks.map(i=>state.groups[i])); let adj=0; picks.forEach(i=>adj+=state.adjust[i]||0);
@@ -822,7 +932,7 @@ function loadSample(){ const c=makeSample(); setImage(c, '예시 이미지'); }
 
 // ───────────────────────── 실시간(동영상) 카운팅
 const liveVideo = $('live');
-const live = { on:false, stream:null, timer:null, busy:false, hist:[], lastT:0 };
+const live = { on:false, capture:false, stream:null, timer:null, busy:false, hist:[], lastT:0 };
 async function startLive(file){
   stopLive(true);
   try{
@@ -860,7 +970,7 @@ function liveTick(){
         state.pills = pills;
         state.groups = state.mode==='single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
         state.groups.sort((a,b)=>b.length-a.length);
-        state.adjust = {};
+        state.adjust = {}; state.conf = null;
         // 흔들림 완화: 최근 5프레임 합계의 중앙값을 안내 문구에 표시
         const total = state.groups.reduce((s,_,i)=>s+groupCount(i),0);
         live.hist.push(total); if(live.hist.length>5) live.hist.shift();
@@ -886,8 +996,51 @@ function freezeLive(){
   stopLive(false);
   setImage(snap, label);
 }
+// ───────────────────────── 촬영(연속 3장): 카메라 미리보기 → 찍기 → 0.3초 간격 3장 → 각 장을 3조건으로 분석해 합산
+async function startCapture(){
+  if(!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)){ $('file-camera').click(); return; }
+  stopLive(true);
+  try{
+    live.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1920 }, height:{ ideal:1440 } }, audio:false });
+    liveVideo.srcObject = live.stream; await liveVideo.play();
+  }catch(e){ console.warn('카메라 미리보기 실패, 기본 카메라 앱으로 대체', e); stopLive(true); $('file-camera').click(); return; }
+  live.on = true; live.capture = true; state.source='촬영'; state.selected=-1; cancelMerge();
+  $('live-bar').hidden=false; $('live-msg').textContent='알약 위에서 수직으로 비추고 찍기를 누르세요'; $('live-fps').textContent='';
+  $('btn-shoot').hidden=false; $('btn-shoot').disabled=false; $('btn-stop').hidden=false;
+  for(const id of ['btn-live','btn-camera','btn-file','btn-sample']) $(id).hidden=true;
+  $('dock-row').classList.add('capture'); $('conf').hidden=true;
+  octx.clearRect(0,0,overlay.width,overlay.height);
+  previewTick();
+}
+function previewTick(){
+  if(!live.on || !live.capture) return;
+  if(liveVideo.readyState >= 2){
+    const vw=liveVideo.videoWidth, vh=liveVideo.videoHeight;
+    if(vw && vh){ const sc=Math.min(1, 640/Math.max(vw,vh)); const w=Math.round(vw*sc), h=Math.round(vh*sc);
+      if(photo.width!==w||photo.height!==h){ photo.width=w; photo.height=h; overlay.width=w; overlay.height=h; }
+      pctx.drawImage(liveVideo,0,0,w,h); }
+  }
+  live.timer = setTimeout(()=>requestAnimationFrame(previewTick), 60);
+}
+function grabFrame(MAX){
+  const vw=liveVideo.videoWidth, vh=liveVideo.videoHeight; const s=Math.min(1, MAX/Math.max(vw,vh));
+  const c=document.createElement('canvas'); c.width=Math.round(vw*s); c.height=Math.round(vh*s);
+  c.getContext('2d',{willReadFrequently:true}).drawImage(liveVideo,0,0,c.width,c.height); return c;
+}
+async function shootBurst(){
+  if(!live.on || !live.capture || liveVideo.readyState<2) return;
+  $('btn-shoot').disabled=true; $('live-msg').textContent='촬영 중… 움직이지 마세요';
+  const frames=[];
+  for(let i=0;i<3;i++){ frames.push(grabFrame(900)); if(i<2) await new Promise(r=>setTimeout(r,300)); }
+  stopLive(false); bumpUsage();
+  const f=frames[0]; photo.width=f.width; photo.height=f.height; overlay.width=f.width; overlay.height=f.height; pctx.drawImage(f,0,0);
+  state.source='촬영(3장)'; state.adjust={}; state.selected=-1; cancelMerge();
+  analyze(frames);
+}
+$('btn-shoot').onclick=shootBurst;
 function stopLive(silent){
-  live.on = false; clearTimeout(live.timer);
+  live.on = false; live.capture = false; clearTimeout(live.timer);
+  $('btn-shoot').hidden=true; $('dock-row').classList.remove('capture');
   if(live.stream){ live.stream.getTracks().forEach(t=>t.stop()); live.stream=null; }
   liveVideo.pause(); if(liveVideo.src){ URL.revokeObjectURL(liveVideo.src); liveVideo.removeAttribute('src'); } liveVideo.srcObject=null;
   $('live-bar').hidden=true; $('btn-freeze').hidden=true; $('btn-stop').hidden=true;
@@ -897,7 +1050,7 @@ function stopLive(silent){
 }
 $('btn-live').onclick=()=>{ if(!canAnalyze('live')){ openPaywall('실시간 카운팅은 Pro 구독에서 사용할 수 있습니다.'); return; } startLive(); };
 $('btn-freeze').onclick=freezeLive;
-$('btn-stop').onclick=()=>{ stopLive(false); render(); };
+$('btn-stop').onclick=()=>{ const cap=live.capture; stopLive(false); if(cap){ state.pills=[]; state.groups=[]; state.conf=null; setChip('촬영 취소'); $('chip-time').hidden=true; } render(); };
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && live.on && live.stream) { stopLive(false); render(); } });
 
 
@@ -985,7 +1138,7 @@ $('paywall').addEventListener('click', e=>{ if(e.target===$('paywall')) closePay
 initPurchases();
 
 // ───────────────────────── 이벤트
-$('btn-camera').onclick=()=>{ if(!canAnalyze('photo')){ openPaywall('오늘 무료 분석 5회를 모두 사용했습니다. Pro를 구독하면 제한 없이 사용할 수 있습니다.'); return; } $('file-camera').click(); };
+$('btn-camera').onclick=()=>{ if(!canAnalyze('photo')){ openPaywall('오늘 무료 분석 5회를 모두 사용했습니다. Pro를 구독하면 제한 없이 사용할 수 있습니다.'); return; } startCapture(); };
 $('btn-file').onclick=()=>$('file-pick').click();
 $('file-camera').onchange=e=>{loadFile(e.target.files[0]); e.target.value='';};
 $('file-pick').onchange=e=>{loadFile(e.target.files[0]); e.target.value='';};
@@ -998,14 +1151,15 @@ $('btn-merge').onclick=startMerge; $('merge-cancel').onclick=cancelMerge; $('mer
 $('btn-copy').onclick=async()=>{
   const lines=state.groups.map((g,i)=>`종류 ${i+1} (${describe(i)}): ${groupCount(i)}정`);
   const total=state.groups.reduce((s,_,i)=>s+groupCount(i),0);
-  const txt=`알약캡쳐 결과 · ${new Date().toLocaleString('ko-KR')}\n${lines.join('\n')}\n합계: ${total}정`;
+  const c=state.conf; const confLine = c ? `\n신뢰도: ${c.conf>=0.75?'높음':c.conf>=0.5?'보통':'낮음'} (${c.n}회 분석 중 ${c.agree}회 일치, 범위 ${c.min}~${c.max}정)` : '';
+  const txt=`알약캡쳐 결과 · ${new Date().toLocaleString('ko-KR')}\n${lines.join('\n')}\n합계: ${total}정${confLine}`;
   try{ await navigator.clipboard.writeText(txt); $('btn-copy').textContent='복사됨'; setTimeout(()=>$('btn-copy').textContent='결과 복사',1400); }catch{ alert(txt); }
 };
 // 드래그앤드롭(PC)
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault(); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&(f.type.startsWith('image/')||f.type.startsWith('video/'))) loadFile(f);});
 // 테스트 훅
-window.__pill = { state, analyze, loadSample, groupCount, Pro, openPaywall, canAnalyze };
+window.__pill = { state, analyze, runOnce, pickResult, estCount, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
 
 loadSample();
 })();
