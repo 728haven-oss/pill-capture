@@ -8,7 +8,8 @@ npm install
 npx cap add android
 npx cap sync android
 # Play 요구: targetSdk 36 이상 (2026) → SDK 36 + AGP 8.9 / Gradle 8.11 (Capacitor 7 + RevenueCat 11 = Play Billing 8)
-sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 36/; s/targetSdkVersion = [0-9]*/targetSdkVersion = 36/' android/variables.gradle
+# Play 자동 보호(Automatic Protection)는 minSdk 24 이상 요구 → 24로 상향(Android 7.0, 2016년)
+sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 24/; s/compileSdkVersion = [0-9]*/compileSdkVersion = 36/; s/targetSdkVersion = [0-9]*/targetSdkVersion = 36/' android/variables.gradle
 sed -i "s/com.android.tools.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.9.1/" android/build.gradle
 sed -i 's|gradle-[0-9.]*-all.zip|gradle-8.11.1-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
 grep -n "SdkVersion" android/variables.gradle; grep -n "tools.build:gradle" android/build.gradle; grep -n distributionUrl android/gradle/wrapper/gradle-wrapper.properties
