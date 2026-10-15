@@ -261,13 +261,15 @@ function setImage(img, label){
 // ───────────────────────── 핵심 분석
 // 앙상블: 같은 사진(또는 연속 촬영 여러 장)을 서로 다른 조건(축소 배율·배경 임계값)으로 여러 번 분석해
 // 가장 많이 나온 개수를 채택하고, 결과가 얼마나 일치했는지를 신뢰도로 보여준다.
-const VARIANTS_PHOTO = [[1,1],[1,0.85],[1,1.2],[0.85,1],[0.85,1.2],[0.7,1],[0.7,0.85]]; // [배율, 임계값 배수] — 사진 1장
-const VARIANTS_BURST = [[1,1],[0.85,0.85],[0.85,1.2]];                                  // 연속 촬영 3장 × 3조건
-function runOnce(src, scale, thrMul){
+// [배율, 임계값 배수, 옵션] — 사진 1장: 임계값 5단계 × '면 인식' 켬 + 임계값 3단계 × '면 인식' 끔(가장자리 배경색 방식). 두 배경 방식이 서로의 약점을 보완하도록 함께 투표.
+// 축소 배율 변화는 큰 알약·트레이 장면에서 불안정해 쓰지 않는다
+const VARIANTS_PHOTO = [[1,1],[1,0.85],[1,0.92],[1,1.1],[1,1.2],[1,1,{noSurf:1}],[1,0.85,{noSurf:1}],[1,1.2,{noSurf:1}]];
+const VARIANTS_BURST = [[1,1],[1,0.9],[1,1.15],[1,1,{noSurf:1}]];   // 연속 촬영 3장 × 4조건
+function runOnce(src, scale, thrMul, extra){
   const W=src.width, H=src.height; let d,w,h;
   if(scale<1){ w=Math.round(W*scale); h=Math.round(H*scale); const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d',{willReadFrequently:true}); cx.drawImage(src,0,0,w,h); d=cx.getImageData(0,0,w,h).data; }
   else { w=W; h=H; d=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data; }
-  const pills=segment(d,w,h,{thrMul});
+  const pills=segment(d,w,h,Object.assign({thrMul},extra||{}));
   if(scale<1){ const k=1/scale; for(const p of pills){ p.cx*=k; p.cy*=k; p.a*=k; p.b*=k; p.area*=k*k; } } // 좌표·면적을 원래 크기로
   const groups = state.mode==='single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
   groups.sort((a,b)=>b.length-a.length);
@@ -276,13 +278,13 @@ function runOnce(src, scale, thrMul){
 function pickResult(runs){
   const totals=runs.map(r=>r.total); const sorted=[...totals].sort((a,b)=>a-b); const median=sorted[sorted.length>>1];
   const freq=new Map(); for(const t of totals) freq.set(t,(freq.get(t)||0)+1);
-  const base=(runs.find(r=>r.scale===1 && r.thrMul===1)||runs[0]).total;   // 동률이면 기본 조건(원본 크기·기본 임계값) 결과 우선, 그다음 중앙값에 가까운 쪽
+  const base=(runs.find(r=>r.scale===1 && r.thrMul===1 && !r.opt)||runs[0]).total;   // 동률이면 기본 조건(원본 크기·기본 임계값) 결과 우선, 그다음 중앙값에 가까운 쪽
   let mode=null, best=-1;
   for(const [t,c] of freq){ if(c>best || (c===best && Math.abs(t-median)<Math.abs(mode-median))){ best=c; mode=t; } }
   if(best>=2 && freq.get(base)===best) mode=base;
   const tol=Math.max(1, Math.round(mode*0.05));                      // 5% 이내면 일치로 본다
   const agree=totals.filter(t=>Math.abs(t-mode)<=tol).length;
-  const chosen = runs.find(r=>r.total===mode && r.scale===1 && r.thrMul===1) || runs.find(r=>r.total===mode);
+  const chosen = runs.find(r=>r.total===mode && r.scale===1 && r.thrMul===1 && !r.opt) || runs.find(r=>r.total===mode);
   return {chosen, mode, conf:agree/runs.length, agree, n:runs.length, min:sorted[0], max:sorted[sorted.length-1]};
 }
 let analyzeSeq=0;
@@ -290,7 +292,7 @@ function analyze(frames){
   const seq=++analyzeSeq, t0=performance.now();
   const srcs = frames && frames.length ? frames : [photo];
   const variants = srcs.length>1 ? VARIANTS_BURST : VARIANTS_PHOTO;
-  const jobs=[]; srcs.forEach((f,fi)=>variants.forEach(([s,t])=>jobs.push([f,fi,s,t])));
+  const jobs=[]; srcs.forEach((f,fi)=>variants.forEach(([s,t,o])=>jobs.push([f,fi,s,t,o])));
   const runs=[];
   setChip('분석 중…', true);
   return new Promise(resolve=>{
@@ -309,8 +311,8 @@ function analyze(frames){
     const step=k=>{
       if(seq!==analyzeSeq) return resolve(null);          // 새 분석이 시작되면 중단
       if(k>=jobs.length) return finish();
-      const [f,fi,s,t]=jobs[k];
-      try{ const r=runOnce(f,s,t); r.frame=fi; runs.push(r); }catch(e){ console.error(e); }
+      const [f,fi,s,t,o]=jobs[k];
+      try{ const r=runOnce(f,s,t,o); r.frame=fi; r.opt=o||null; runs.push(r); }catch(e){ console.error(e); }
       setChip(`분석 중… ${k+1}/${jobs.length}`, true);
       setTimeout(()=>step(k+1), 0);
     };
@@ -325,40 +327,71 @@ function segment(d, w, h, opt){
   const dbg=(o,why,extra)=>{ if(SEGDBG) SEGDBG.push(Object.assign({n:o.s.n,elong:+o.s.elong.toFixed(2),fill:+o.s.fill.toFixed(2),bw:o.s.bw,bh:o.s.bh,why},extra||{})); };
   const thrMul = opt.thrMul || 1;   // 앙상블: 배경 임계값 변화(0.85·1·1.2)
   const n = w*h;
-  // 1) 배경색: 가장자리 픽셀의 중앙값
-  const m = Math.max(4, Math.round(Math.min(w,h)*0.05));
-  const rs=[],gs=[],bs=[];
-  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
-    if(x<m||y<m||x>=w-m||y>=h-m){ const i=(y*w+x)*4; rs.push(d[i]);gs.push(d[i+1]);bs.push(d[i+2]); }
-  }
+  // 1) 배경: 사진 속 '면'(책상·트레이·유리판처럼 크고 매끈한 영역)을 찾아, 각 픽셀을 자기가 놓인 면의 색과 비교한다.
+  //    (가장자리 색 하나만 배경으로 쓰면 흰 책상 위 초록 트레이 위의 흰 알약이 트레이 덩어리 속 구멍으로 묻힌다)
+  //    면을 못 찾으면 예전 방식(가장자리 중앙값)으로 돌아간다.
+  const surf = opt.noSurf ? null : findSurfaces(d,w,h);
   const med = a => { a.sort((p,q)=>p-q); return a[a.length>>1]; };
-  const br=med(rs), bg=med(gs), bb=med(bs);
-  // 2) 배경과의 거리 → Otsu 임계값
+  let br,bg,bb;
+  if(surf){ const c=surf.colors[surf.mainId]; br=c[0]; bg=c[1]; bb=c[2]; }
+  else {
+    const m = Math.max(4, Math.round(Math.min(w,h)*0.05));
+    const rs=[],gs=[],bs=[];
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      if(x<m||y<m||x>=w-m||y>=h-m){ const i=(y*w+x)*4; rs.push(d[i]);gs.push(d[i+1]);bs.push(d[i+2]); }
+    }
+    br=med(rs); bg=med(gs); bb=med(bs);
+  }
+  const bgAt = surf ? (x,y)=>surf.colors[surf.near[((y/surf.f)|0)*surf.sw + ((x/surf.f)|0)]] : ()=>[br,bg,bb];
+  if(SEGDBG) SEGDBG.surf=surf;
+  if(SEGDBG) SEGDBG.push({why:'surfaces', n: surf?surf.colors.length:0, colors: surf?surf.colors.map(c=>c.map(Math.round).join('/')).join(' '):'fallback', areas: surf?surf.areas.map(a=>Math.round(a*100)).join('/'):''});
+  // 2) 놓인 면과의 색 거리 → Otsu 임계값
   const dist = new Float32Array(n);
   let maxd=0;
-  for(let i=0;i<n;i++){
-    const j=i*4, dr=d[j]-br, dg=d[j+1]-bg, db=d[j+2]-bb;
-    // 색상 차이에 가중(밝기만 다른 그림자에 덜 민감)
-    const lum = (dr+dg+db)/3;
-    const chroma = Math.sqrt(((dr-lum)**2+(dg-lum)**2+(db-lum)**2));
-    const v = Math.sqrt(lum*lum*0.55 + chroma*chroma*2.2);
-    dist[i]=v; if(v>maxd) maxd=v;
-  }
+  for(let y=0;y<h;y++){ const row=surf ? ((y/surf.f)|0)*surf.sw : 0;
+    for(let x=0;x<w;x++){ const i=y*w+x, j=i*4;
+      const c = surf ? surf.colors[surf.near[row + ((x/surf.f)|0)]] : null;
+      const dr=d[j]-(c?c[0]:br), dg=d[j+1]-(c?c[1]:bg), db=d[j+2]-(c?c[2]:bb);
+      // 색상 차이에 가중(밝기만 다른 그림자에 덜 민감)
+      const lum = (dr+dg+db)/3;
+      const chroma = Math.sqrt(((dr-lum)**2+(dg-lum)**2+(db-lum)**2));
+      const v = Math.sqrt(lum*lum*0.55 + chroma*chroma*2.2);
+      dist[i]=v; if(v>maxd) maxd=v; } }
   const hist = new Float64Array(256); const sc = 255/(maxd||1);
   for(let i=0;i<n;i++) hist[Math.min(255, (dist[i]*sc)|0)]++;
   let thr = otsu(hist, n)/sc;
-  thr = Math.max(thr*thrMul, 18); // 너무 낮은 임계값 방지(균일 배경 노이즈)
+  // 여러 면이 섞인 사진에서는 Otsu 가 큰 물체(펜·트레이 테두리) 때문에 너무 높아져 알약을 놓친다 →
+  // 면마다 그 면의 잡음 수준(중앙값 + 4×MAD)을 재서, 그보다 높게는 잡지 않는다(면별 임계값)
+  // 잡음 수준: 분포의 아래쪽 절반(순수 배경)만으로 σ를 추정(중앙값−25% 분위 ≈ 0.674σ). 위쪽은 알약·물체가 섞여 있어 쓰지 않는다
+  const noiseOf=(hh,cnt)=>{ let acc=0,k25=-1,kmed=0; for(kmed=0;kmed<255;kmed++){ acc+=hh[kmed]; if(k25<0 && acc>=cnt*0.25) k25=kmed; if(acc>=cnt*0.5) break; }
+    const sigma=Math.max(1, (kmed-Math.max(0,k25))*1.4826);
+    return (kmed + 4*sigma)/sc; };
+  const S = surf ? surf.colors.length : 1;
+  const thrS = new Float32Array(S);
+  if(surf){
+    const hs=Array.from({length:S},()=>new Float64Array(256)); const cs=new Float64Array(S);
+    // 잡음 통계는 면 자체(매끈한 셀)의 픽셀만으로 — 그 면에 놓인 알약 더미가 섞이면 잡음이 과대평가된다
+    for(let y=0;y<h;y++){ const row=((y/surf.f)|0)*surf.sw; for(let x=0;x<w;x++){ const id=surf.own[row+((x/surf.f)|0)]; if(id<0) continue; const i=y*w+x; hs[id][Math.min(255,(dist[i]*sc)|0)]++; cs[id]++; } }
+    const F=opt.noiseF||0.75;   // 면 잡음 기준이 Otsu 의 75% 아래로 내려가진 않게(더미 실루엣은 높은 임계값이 더 깨끗하게 나뉜다)
+    for(let k=0;k<S;k++) thrS[k]=Math.max(18, Math.min(thr, Math.max(thr*F, cs[k]?noiseOf(hs[k],cs[k]):thr))*thrMul);
+  } else thrS[0]=Math.max(18, Math.min(thr, Math.max(thr*(opt.noiseF||0.75), noiseOf(hist,n)))*thrMul);
+  if(SEGDBG) SEGDBG.push({why:'thr', otsu:Math.round(thr), thrS:Array.from(thrS).map(Math.round).join('/'), probe:(opt.probe||[]).map(([x,y])=>Math.round(dist[y*w+x])), nearAt:(opt.probe||[]).map(([x,y])=>surf?surf.near[((y/surf.f)|0)*surf.sw+((x/surf.f)|0)]:-1)});
   let fg = new Uint8Array(n);
-  for(let i=0;i<n;i++) fg[i] = dist[i]>thr ? 1:0;
+  if(surf){ for(let y=0;y<h;y++){ const row=((y/surf.f)|0)*surf.sw; for(let x=0;x<w;x++){ const i=y*w+x; fg[i] = dist[i]>thrS[surf.near[row+((x/surf.f)|0)]] ? 1:0; } } }
+  else for(let i=0;i<n;i++) fg[i] = dist[i]>thrS[0] ? 1:0;
+  thr = thrS[surf?surf.mainId:0];
   // 3) 형태학: 열기(노이즈 제거) 후 닫기(구멍 메움)
   fg = dilate(erode(fg,w,h),w,h);
   fg = erode(dilate(fg,w,h),w,h);
-  fillHoles(fg,w,h);
+  fillHoles(fg,w,h,opt.oldFill);
   // 3b) 배경과 색이 비슷한 알약(흰 알약 + 흰 배경): 윤곽선(기울기) 기반 마스크를 합침
   const edge = filterShapes(edgeMask(d, w, h), w, h);
+  if(SEGDBG){ SEGDBG.fg0=fg.slice(); SEGDBG.edge=edge; }
   for(let i=0;i<n;i++) if(edge[i]) fg[i]=1;
+  if(SEGDBG) SEGDBG.fg=fg.slice();
   // 4) 연결요소
   const comps = components(fg,w,h);
+  if(SEGDBG) SEGDBG.push({why:'comps', n:comps.length, sizes:comps.map(c=>c.length).sort((a,b)=>b-a).slice(0,40).join(',')});
   if(!comps.length) return [];
   const minA = minPillArea(w,h);
   const cand = comps.filter(c=>c.length>=minA).map(c=>({px:c, s:blobShape(c,w)}));
@@ -373,7 +406,12 @@ function segment(d, w, h, opt){
   // 확실한 낱알들의 대표색(채널별 중앙값): 더미 분할 조각의 색 검증 기준
   let refRGB=null;
   { const cs=cand.filter(o=>sizeOK(o) && pillLike(o.s,w,h,n,false)).map(o=>features(o.px,d,w,1)[0].rgb);
-    if(cs.length>=2){ const m=k=>{const a=cs.map(c=>c[k]).sort((x,y)=>x-y); return a[a.length>>1];}; refRGB=[m(0),m(1),m(2)]; } }
+    if(cs.length>=2){
+      // 낱알 색이 두 무리(알약 / 유리·테두리 조각)로 갈릴 수 있으므로 가장 큰 무리(동률이면 밝은 쪽)의 중앙색을 기준으로
+      const medOf=arr=>{ const m=k=>{const a=arr.map(c=>c[k]).sort((x,y)=>x-y); return a[a.length>>1];}; return [m(0),m(1),m(2)]; };
+      let ref=medOf(cs); let grp=cs.filter(c=>colorDist(c,ref)<=45); let rest=cs.filter(c=>colorDist(c,ref)>45);
+      if(rest.length>grp.length || (rest.length===grp.length && rest.length && (rest[0][0]+rest[0][1]+rest[0][2])>(grp[0][0]+grp[0][1]+grp[0][2]))){ const r2=medOf(rest); const g2=cs.filter(c=>colorDist(c,r2)<=45); if(g2.length>=grp.length){ ref=medOf(g2); grp=g2; } }
+      refRGB=medOf(grp.length?grp:cs); } }
   const pass = (refA) => {
   const refR = Math.sqrt(refA/Math.PI);
   // 6) 덩어리별 판정
@@ -382,8 +420,23 @@ function segment(d, w, h, opt){
   //    - 나뉘지 않거나 조각이 알약 모양이 아니면 구조물(유리 모서리·자·전선·책상 선) → 그 위의 알약만 건짐
   const pills=[];
   const dt = new Float32Array(n);
-  for(const o of cand){
-    const c=o.px;
+  const queue = cand.map(o=>({px:o.px, s:o.s, depth:0}));
+  while(queue.length){
+    const o=queue.shift(); const c=o.px;
+    // 선·테두리에 알약이 붙은 덩어리(트레이 테두리 옆 알약, 테두리에 닿은 더미): 선의 굵기를 재서 그만큼 깎아내고 남는 두꺼운 조각만 다시 판정
+    if(!opt.noPeel && o.depth===0 && !pillLike(o.s,w,h,n,true) && (o.s.fill<0.5 || o.s.elong>4 || lineLike(o.s,w,h)) && c.length>=minA*2){
+      let pieces=[];
+      if(refRGB){ // 기준 알약 색이 있으면: 덩어리 안에서 알약 색인 픽셀만 남겨 조각을 뜬다(어두운 테두리 위의 밝은 알약)
+        let minx=w,maxx=0,miny=h,maxy=0; for(const p of c){const x=p%w,y=(p-x)/w; if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;}
+        const bw2=maxx-minx+3, bh2=maxy-miny+3; let m=new Uint8Array(bw2*bh2); let cntc=0;
+        for(const p of c){ const j=p*4; if(colorDist([d[j],d[j+1],d[j+2]],refRGB)<=45){ const x=p%w-minx+1, y=((p-(p%w))/w)-miny+1; m[y*bw2+x]=1; cntc++; } }
+        if(cntc>=minA && cntc < c.length*0.85){ m=dilate(erode(m,bw2,bh2),bw2,bh2); m=erode(dilate(m,bw2,bh2),bw2,bh2);
+          pieces=components(m,bw2,bh2).filter(sub=>sub.length>=minA).map(sub=>sub.map(i=>{const x=i%bw2, y=(i-x)/bw2; return (y+miny-1)*w+(x+minx-1);})); }
+      }
+      if(!pieces.length) pieces=peelLine(c,w,h,minA);
+      dbg(o,'peel',{pieces:pieces.length, areas:pieces.slice(0,12).map(p=>Math.round(p.length/refA*10)/10).join(',')});
+      if(pieces.length){ for(const q of pieces){ const qs=blobShape(q,w); if(pillLike(qs,w,h,n,true) || (hasRef && q.length>refA*2.2 && qs.fill>=0.45)) queue.push({px:q, s:qs, depth:1}); } continue; }   // 선을 깎고 남은 조각 중 알약(또는 더미) 모양만
+    }
     if(hasRef && c.length < refA*1.25){ if(pillLike(o.s,w,h,n,true)){ const f=features(c, d, w, refA); if(pillLike(o.s,w,h,n,false) && sizeOK(o)) f[0].single=true; pills.push(...f); dbg(o,'small-ok'); } else dbg(o,'small-drop'); continue; }
     if(!hasRef && pillLike(o.s,w,h,n,false)){ pills.push(...features(c, d, w, refA)); continue; }
     // 기준 알약보다 큰 덩어리는 먼저 목(neck) 기준으로 나눠 본다(붙은 알약)
@@ -392,7 +445,7 @@ function segment(d, w, h, opt){
     // 화면 테두리 두 변 이상에 닿은 큰 덩어리는 책상·쟁반 같은 배경 구조물 → 더미 분할 대상에서 제외
     const borders=(o.s.minx<=0)+(o.s.maxx>=w-1)+(o.s.miny<=0)+(o.s.maxy>=h-1);
     const peakSplit=new Set();
-    if(hasRef && borders<2){ const more=[]; for(const p of parts){ if(p.length > refA*2.2 && !lineLike(blobShape(p,w),w,h)){ let qs=splitByPeaks(p,d,w,h,refR,[br,bg,bb]); if(qs.length>1) qs=sameColorParts(qs,d,w,refRGB); if(qs.length>1) for(const q of qs){ peakSplit.add(q); more.push(q); } else more.push(p); } else more.push(p); } parts=more; }
+    if(hasRef && borders<2){ const more=[]; for(const p of parts){ if(p.length > refA*2.2 && !lineLike(blobShape(p,w),w,h)){ const ps=blobShape(p,w); let qs=splitByPeaks(p,d,w,h,refR,bgAt((ps.minx+ps.maxx)>>1,(ps.miny+ps.maxy)>>1)); if(qs.length>1) qs=sameColorParts(qs,d,w,refRGB); if(qs.length>1) for(const q of qs){ peakSplit.add(q); more.push(q); } else more.push(p); } else more.push(p); } parts=more; }
     dbg(o,'big',{refA:Math.round(refA),borders,parts:parts.length,peak:peakSplit.size});
     if(parts.length>1){
       // 조각이 알약(또는 몇 알이 겹친 덩어리) 모양이면 인정. 기준 알약의 6배를 넘는 조각은 알약이 아님(책상·그림자)
@@ -436,17 +489,71 @@ function segment(d, w, h, opt){
   // 색 일관성: 확실한 낱알(single)과 비슷한 색의 후보만 남긴다. 알약은 종류별로 색이 같고, 책상·유리 모서리·그림자 조각은 어느 낱알과도 색이 다르다.
   const sure=pills.filter(p=>p.single);
   if(sure.length>=2){
-    const near=(p,q)=>colorDist(p.rgb,q.rgb)<=60;
+    const near=(p,q)=>colorDist(p.rgb,q.rgb)<=50;
     // 확실한 낱알 면적 중앙값의 30% 미만인 조각은 잡티(유리 반사·그림자 조각)
     const sa=sure.map(p=>p.area).sort((x,y)=>x-y)[sure.length>>1];
-    const kept=pills.filter(p=>p.area >= sa*0.3 && (p.single || sure.some(s=>near(p,s))));
-    if(SEGDBG) SEGDBG.push({why:'colorfilter', before:pills.length, after:kept.length, singles:sure.length, sa:Math.round(sa)});
+    // 낱알도 아니고 더미에서 나뉜 조각도 아닌데 낱알의 2.5배보다 큰 덩어리(반사광·펜·쟁반 조각)는 알약이 아니다
+    const kept=pills.filter(p=>p.area >= sa*0.2 && (p.single || sure.some(s=>near(p,s))) && (p.single || p.fixed || p.piece || p.area <= sa*2.5));
+    if(SEGDBG){ SEGDBG.push({why:'colorfilter', before:pills.length, after:kept.length, singles:sure.length, sa:Math.round(sa), sureRGB:sure.map(p=>p.rgb.join('/')).join(' ')});
+      for(const p of pills) if(!kept.includes(p)) SEGDBG.push({why:'dropped', at:Math.round(p.cx)+','+Math.round(p.cy), area:p.area, rgb:p.rgb.join('/'), mind:Math.round(Math.min(...sure.map(s=>colorDist(p.rgb,s.rgb))))}); }
     // 나뉜 조각의 모양(길쭉함·크기)은 임의적이므로 종류 묶기에는 낱알의 대표 모양을 쓴다 → 같은 색이면 같은 종류로 묶임
     const el=sure.map(p=>p.elong).sort((x,y)=>x-y)[sure.length>>1];
     for(const p of kept) if(!p.single){ p.elong=el; p.relArea=1; }
     return kept;
   }
   return pills;
+}
+// ── 사진 속 '면' 찾기: 축소본에서 색을 4개로 군집화 → 라벨별 연결요소 중 넓고(≥4%) 매끈한(기울기 작은) 것이 면.
+//    각 축소 픽셀에 가장 가까운 면의 번호(near)와 면의 대표색(colors)을 돌려준다. 면이 없으면 null.
+function findSurfaces(d,w,h){
+  const f=Math.max(1, Math.ceil(Math.max(w,h)/160)), sw=Math.ceil(w/f), sh=Math.ceil(h/f), N=sw*sh;
+  const R=new Float32Array(N), G=new Float32Array(N), B=new Float32Array(N), L=new Float32Array(N), T=new Float32Array(N);
+  // 원본 해상도 기울기(이웃 픽셀 밝기 차)의 셀 평균 = 질감. 알약 더미는 알약 경계 때문에 높고, 책상·트레이는 낮다(축소 배율과 무관)
+  for(let sy=0;sy<sh;sy++)for(let sx=0;sx<sw;sx++){ let r=0,g=0,b=0,k=0,t=0;
+    for(let y=sy*f;y<Math.min(h,(sy+1)*f);y++)for(let x=sx*f;x<Math.min(w,(sx+1)*f);x++){ const j=(y*w+x)*4; r+=d[j];g+=d[j+1];b+=d[j+2];k++;
+      if(x<w-1&&y<h-1){ const l0=d[j]+d[j+1]+d[j+2], l1=d[j+4]+d[j+5]+d[j+6], l2=d[j+w*4]+d[j+w*4+1]+d[j+w*4+2]; t+=(Math.abs(l1-l0)+Math.abs(l2-l0))/6; } }
+    const i=sy*sw+sx; R[i]=r/k; G[i]=g/k; B[i]=b/k; L[i]=(r+g+b)/(3*k); T[i]=t/k; }
+  // k-means(K=4), 초기값: 서로 가장 먼 점들
+  const K=4; const cen=[]; { let i0=0; cen.push([R[i0],G[i0],B[i0]]);
+    while(cen.length<K){ let bi=0,bd=-1; for(let i=0;i<N;i+=3){ let md=1e12; for(const c of cen){ const dd=(R[i]-c[0])**2+(G[i]-c[1])**2+(B[i]-c[2])**2; if(dd<md) md=dd; } if(md>bd){bd=md;bi=i;} } cen.push([R[bi],G[bi],B[bi]]); } }
+  const lab=new Uint8Array(N);
+  for(let it=0;it<8;it++){
+    const acc=cen.map(()=>[0,0,0,0]);
+    for(let i=0;i<N;i++){ let bi=0,bd=1e12; for(let k=0;k<K;k++){ const c=cen[k]; const dd=(R[i]-c[0])**2+(G[i]-c[1])**2+(B[i]-c[2])**2; if(dd<bd){bd=dd;bi=k;} } lab[i]=bi; const a=acc[bi]; a[0]+=R[i];a[1]+=G[i];a[2]+=B[i];a[3]++; }
+    for(let k=0;k<K;k++) if(acc[k][3]) cen[k]=[acc[k][0]/acc[k][3],acc[k][1]/acc[k][3],acc[k][2]/acc[k][3]];
+  }
+  // 기울기(소벨) — 매끈함 판정용
+  const grad=new Float32Array(N);
+  for(let y=1;y<sh-1;y++)for(let x=1;x<sw-1;x++){ const i=y*sw+x;
+    const gx=(L[i-sw+1]+2*L[i+1]+L[i+sw+1])-(L[i-sw-1]+2*L[i-1]+L[i+sw-1]), gy=(L[i+sw-1]+2*L[i+sw]+L[i+sw+1])-(L[i-sw-1]+2*L[i-sw]+L[i-sw+1]);
+    grad[i]=Math.sqrt(gx*gx+gy*gy)/8; }
+  // 질감이 많은 셀(알약 더미·인쇄물·경계)은 면 후보에서 빼고, 열기(침식 2회→팽창 2회)로 가는 다리를 끊은 뒤 라벨별 연결요소
+  let smooth=new Uint8Array(N); for(let i=0;i<N;i++) smooth[i]=(grad[i]<12 && T[i]<6)?1:0;
+  for(let t=0;t<2;t++) smooth=erode(smooth,sw,sh);
+  for(let t=0;t<2;t++) smooth=dilate(smooth,sw,sh);
+  const comp=new Int32Array(N).fill(-1); const surfaces=[]; const stack=[];
+  for(let s0=0;s0<N;s0++){ if(comp[s0]>=0 || !smooth[s0]) continue; const k=lab[s0]; const px=[]; stack.push(s0); comp[s0]=0;
+    while(stack.length){ const p=stack.pop(); px.push(p); const x=p%sw, y=(p-x)/sw;
+      for(const q of [p-1,p+1,p-sw,p+sw]){ if(q<0||q>=N) continue; const qx=q%sw; if(Math.abs(qx-x)>1) continue; if(comp[q]<0 && smooth[q] && lab[q]===k){ comp[q]=0; stack.push(q); } } }
+    let touch=false; for(const p of px){ const x=p%sw, y=(p-x)/sw; if(x<=2||y<=2||x>=sw-3||y>=sh-3){ touch=true; break; } }   // 열기 연산이 가장자리 셀을 지우므로 2셀 여유
+    if(px.length < N*0.04) continue;                   // 면은 4% 이상
+    if(px.length < N*0.10){ const sh0=blobShape(px,sw); if(sh0.fill>=0.75 && sh0.elong<=3) continue; }   // 10% 미만의 둥근 덩어리는 큰 알약일 수 있음 → 면 아님
+    let gsum=0; for(const p of px) gsum+=grad[p]; const gmean=gsum/px.length;
+    if(gmean > 9) continue;                     // 알약 더미·인쇄물처럼 질감이 많은 영역은 면이 아님
+    const rr=[],gg=[],bb=[]; for(let t=0;t<px.length;t+=2){ rr.push(R[px[t]]); gg.push(G[px[t]]); bb.push(B[px[t]]); }
+    const m=a=>{a.sort((u,v)=>u-v); return a[a.length>>1];};
+    surfaces.push({px, color:[m(rr),m(gg),m(bb)], area:px.length/N, gmean});
+  }
+  if(!surfaces.length) return null;
+  // 면이 화면의 상당 부분을 덮을 때만 쓴다(면이 조각조각이면 가장자리 배경색 방식이 더 안정적)
+  { let tot=0, mx=0; for(const s of surfaces){ tot+=s.area; if(s.area>mx) mx=s.area; } if(tot<0.35 || mx<0.15) return null; }
+  // 가장 가까운 면(BFS, 격자 거리)
+  const near=new Int16Array(N).fill(-1); const own=new Int16Array(N).fill(-1); const q=[];
+  surfaces.forEach((s,si)=>{ for(const p of s.px){ near[p]=si; own[p]=si; q.push(p); } });
+  for(let qi=0; qi<q.length; qi++){ const p=q[qi], x=p%sw; const id=near[p];
+    for(const r of [p-1,p+1,p-sw,p+sw]){ if(r<0||r>=N) continue; if(Math.abs((r%sw)-x)>1) continue; if(near[r]<0){ near[r]=id; q.push(r); } } }
+  let mainId=0; surfaces.forEach((s,si)=>{ if(s.area>surfaces[mainId].area) mainId=si; });
+  return { f, sw, sh, near, own, colors:surfaces.map(s=>s.color), areas:surfaces.map(s=>s.area), mainId };
 }
 // ── 알약으로 인정하는 최소 면적(화면의 0.025%, 최소 30px) — 잡티·점이 '기준 크기'를 끌어내리지 않도록 모든 경로에 적용
 function minPillArea(w,h){ return Math.max(30, w*h*0.00025); }
@@ -490,6 +597,29 @@ function pillLike(s,w,h,n,loose){
 // ── 선·테두리처럼 생긴 성분인가? (윤곽선 마스크 정리용. 알약 더미는 통과시킨다)
 function lineLike(s,w,h){
   return s.fill < 0.40 || s.elong > 7 || s.bw > w*0.80 || s.bh > h*0.80;
+}
+// ── 선에 붙은 덩어리 깎기: 거리변환의 능선 값으로 선의 반굵기를 재고, 그보다 조금 더 크게 열기(침식→팽창)해 선을 지운다.
+//    남는 조각(알약·더미)만 돌려준다. 거의 안 깎이면(선이 아니면) 빈 배열.
+function peelLine(c,w,h,minA){
+  let minx=w,maxx=0,miny=h,maxy=0;
+  for(const p of c){const x=p%w,y=(p-x)/w; if(x<minx)minx=x;if(x>maxx)maxx=x;if(y<miny)miny=y;if(y>maxy)maxy=y;}
+  const bw=maxx-minx+3, bh=maxy-miny+3;
+  const inb=new Uint8Array(bw*bh); const g=new Float32Array(bw*bh);
+  for(const p of c){const x=p%w-minx+1,y=((p-(p%w))/w)-miny+1; inb[y*bw+x]=1; g[y*bw+x]=1e6;}
+  for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x; if(!inb[i]){g[i]=0;continue;} g[i]=Math.min(g[i], g[i-1]+3, g[i-bw]+3, g[i-bw-1]+4, g[i-bw+1]+4);}
+  for(let y=bh-2;y>0;y--)for(let x=bw-2;x>0;x--){const i=y*bw+x; if(!inb[i])continue; g[i]=Math.min(g[i], g[i+1]+3, g[i+bw]+3, g[i+bw-1]+4, g[i+bw+1]+4);}
+  const ridge=[];
+  for(let y=1;y<bh-1;y++)for(let x=1;x<bw-1;x++){const i=y*bw+x; if(!inb[i]) continue; const v=g[i]; if(v>=g[i-1]&&v>=g[i+1]&&v>=g[i-bw]&&v>=g[i+bw]) ridge.push(v);}
+  if(ridge.length<10) return [];
+  ridge.sort((a,b)=>a-b);
+  const half=ridge[Math.floor(ridge.length*0.6)]/3;        // 선의 반굵기(픽셀)
+  const r=Math.min(25, Math.max(3, Math.ceil(half)+2));
+  let m=inb; for(let t=0;t<r;t++) m=erode(m,bw,bh);
+  let cnt=0; for(let i=0;i<m.length;i++) cnt+=m[i]; if(!cnt) return [];
+  for(let t=0;t<r;t++) m=dilate(m,bw,bh);
+  let kept=0; for(let i=0;i<m.length;i++){ m[i]=m[i]&&inb[i]?1:0; kept+=m[i]; }
+  if(kept > c.length*0.85) return [];                        // 거의 안 깎임 = 선이 아님
+  return components(m,bw,bh).filter(sub=>sub.length>=minA).map(sub=>sub.map(i=>{const x=i%bw, y=(i-x)/bw; return (y+miny-1)*w+(x+minx-1);}));
 }
 // ── 구조물로 판정된 큰 면(유리판·쟁반·책상) 안쪽을 국소 대비로 다시 훑어 알약만 건져냄
 function rescueBlob(c,d,w,h,n){
@@ -630,6 +760,7 @@ function rectFill(px, w){
 //    벗어난 조각이 40%를 넘으면 애초에 알약 더미가 아니므로 분할을 취소한다.
 // 색 거리: 밝기 차이는 약하게(그림자 속 알약), 색조 차이는 강하게(유리·책상·다른 종류) 반영
 function colorDist(a,b){ const la=(a[0]+a[1]+a[2])/3, lb=(b[0]+b[1]+b[2])/3; let c=0; for(let k=0;k<3;k++){ const t=(a[k]-la)-(b[k]-lb); c+=t*t; } return Math.sqrt((la-lb)*(la-lb)*0.25 + c*1.5); }
+let opt_scTol=0;
 function sameColorParts(parts, d, w, refRGB){
   const cols=parts.map(px=>{ const rr=[],gg=[],bb=[]; for(let i=0;i<px.length;i+=2){const j=px[i]*4; rr.push(d[j]);gg.push(d[j+1]);bb.push(d[j+2]);}
     const m=a=>{a.sort((x,y)=>x-y);return a[a.length>>1];}; return [m(rr),m(gg),m(bb)]; });
@@ -637,7 +768,7 @@ function sameColorParts(parts, d, w, refRGB){
   // 기준색: 화면의 확실한 낱알 색(있으면). 없으면 조각들의 중앙색
   const ref=refRGB || [m(0),m(1),m(2)];
   const keep=[]; let drop=0;
-  parts.forEach((px,i)=>{ const c=cols[i]; if(colorDist(c,ref)<=55) keep.push(px); else drop++; });
+  parts.forEach((px,i)=>{ const c=cols[i]; if(colorDist(c,ref)<=(opt_scTol||42)) keep.push(px); else drop++; });
   if(!refRGB && drop > parts.length*0.4) return [parts.flat()];   // 기준색이 조각들 자체에서 나온 경우 절반 가까이 버려지면 기준이 틀린 것 → 분할 취소
   if(SEGDBG) SEGDBG.push({why:'samecolor', parts:parts.length, keep:keep.length, ref:ref.map(Math.round).join('/')});
   return keep;
@@ -675,12 +806,16 @@ function edgeMask(d,w,h){
 }
 function erode(a,w,h){ const o=new Uint8Array(a.length); for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x; o[i]=a[i]&&a[i-1]&&a[i+1]&&a[i-w]&&a[i+w]?1:0;} return o; }
 function dilate(a,w,h){ const o=new Uint8Array(a.length); for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x; o[i]=a[i]||a[i-1]||a[i+1]||a[i-w]||a[i+w]?1:0;} return o; }
-function fillHoles(fg,w,h){ // 가장자리에서 닿는 배경만 배경으로, 나머지는 전경
-  const n=w*h, seen=new Uint8Array(n), st=[];
-  for(let x=0;x<w;x++){ st.push(x, (h-1)*w+x); } for(let y=0;y<h;y++){ st.push(y*w, y*w+w-1); }
-  while(st.length){ const p=st.pop(); if(seen[p]||fg[p]) continue; seen[p]=1; const x=p%w,y=(p-x)/w;
-    if(x>0)st.push(p-1); if(x<w-1)st.push(p+1); if(y>0)st.push(p-w); if(y<h-1)st.push(p+w); }
-  for(let i=0;i<n;i++) if(!fg[i]&&!seen[i]) fg[i]=1;
+function fillHoles(fg,w,h,old){ // 전경 속 작은 구멍(알약 무늬·반사)만 메운다. 큰 배경 영역(트레이 테두리로 둘러싸인 트레이 안쪽 등)은 배경으로 둔다
+  const n=w*h, seen=new Uint8Array(n), st=[]; const maxHole=old?1e12:Math.max(200, n*0.003);
+  for(let s0=0;s0<n;s0++){ if(fg[s0]||seen[s0]) continue;
+    const px=[]; st.push(s0); seen[s0]=1; let border=false;
+    while(st.length){ const p=st.pop(); px.push(p); const x=p%w,y=(p-x)/w;
+      if(x===0||y===0||x===w-1||y===h-1) border=true;
+      if(x>0&&!fg[p-1]&&!seen[p-1]){seen[p-1]=1;st.push(p-1);} if(x<w-1&&!fg[p+1]&&!seen[p+1]){seen[p+1]=1;st.push(p+1);}
+      if(y>0&&!fg[p-w]&&!seen[p-w]){seen[p-w]=1;st.push(p-w);} if(y<h-1&&!fg[p+w]&&!seen[p+w]){seen[p+w]=1;st.push(p+w);} }
+    if(!border && px.length<=maxHole) for(const p of px) fg[p]=1;
+  }
 }
 // 거리변환(체스판 근사) + 비최대 억제로 봉우리 → 가장 가까운 봉우리로 픽셀 배정
 // 봉우리 사이에 '목'(거리값이 확 줄어드는 허리)이 없으면 같은 물체로 다시 합친다.
@@ -1159,7 +1294,7 @@ $('btn-copy').onclick=async()=>{
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault(); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&(f.type.startsWith('image/')||f.type.startsWith('video/'))) loadFile(f);});
 // 테스트 훅
-window.__pill = { state, analyze, runOnce, pickResult, estCount, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
+window.__pill = { state, analyze, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
 
 loadSample();
 })();
