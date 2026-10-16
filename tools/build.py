@@ -49,6 +49,19 @@ if AUTH.get('enabled'):
 else:
     print('auth OFF')
 body = body + '\n' + AUTH_JS if AUTH_JS else body
+# ── 학습형 알약 검출기 (src/ml: tf.min.js, pillnet.js, pillnet.json, pillnet.bin) → docs/ml/
+#  있으면 <script> 로 주입하고 앱이 시작 시 모델을 읽는다. 없으면 규칙 기반만 동작
+ML_DIR = ROOT / 'src/ml'
+ML_TAGS = ''
+if (ML_DIR / 'pillnet.bin').exists():
+    (DOCS / 'ml').mkdir(exist_ok=True)
+    for f in ('tf.min.js', 'pillnet.js', 'pillnet.json', 'pillnet.bin'):
+        shutil.copy(ML_DIR / f, DOCS / 'ml' / f)
+    mlver = hashlib.sha1((ML_DIR / 'pillnet.bin').read_bytes()).hexdigest()[:8]
+    ML_TAGS = f'<script src="ml/tf.min.js"></script>\n<script src="ml/pillnet.js"></script>\n<script>window.__PC_ML={{json:"ml/pillnet.json?v={mlver}",bin:"ml/pillnet.bin?v={mlver}"}};</script>'
+    print('ml detector ON', mlver)
+else:
+    print('ml detector OFF')
 ver = hashlib.sha1(body.encode()).hexdigest()[:8]
 html = f'''<!doctype html>
 <html lang="ko">
@@ -65,6 +78,7 @@ html = f'''<!doctype html>
 <style>body{{padding-top:env(safe-area-inset-top)}} .dock{{padding-bottom:calc(14px + env(safe-area-inset-bottom))!important}}</style>
 </head>
 <body>
+{ML_TAGS}
 {body}
 <script>
 if ('serviceWorker' in navigator && location.protocol === 'https:') {{
@@ -89,7 +103,7 @@ manifest = {
 (DOCS / 'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
 sw = f'''const C = 'pillcapture-{ver}';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'{', "./ml/tf.min.js", "./ml/pillnet.js", "./ml/pillnet.json", "./ml/pillnet.bin"' if ML_TAGS else ''}];
 self.addEventListener('install', e => {{ e.waitUntil(caches.open(C).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); }});
 self.addEventListener('activate', e => {{ e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); }});
 self.addEventListener('fetch', e => {{
