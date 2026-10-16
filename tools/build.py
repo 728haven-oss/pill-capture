@@ -115,9 +115,9 @@ self.addEventListener('fetch', e => {{
 (DOCS / '.nojekyll').write_text('')
 shutil.copy(ROOT / 'store/privacy.html', DOCS / 'privacy.html')
 shutil.copy(ROOT / 'store/terms.html', DOCS / 'terms.html')
-# 스토어 등록용 이미지도 Pages로 공개 (콘솔 업로드용)
+# 스토어 등록용 이미지도 Pages로 공개 (콘솔 업로드용) — Pages 워크플로에서만 (앱 번들에 6MB 스크린샷이 섞이지 않도록)
 SS = ROOT / 'store/screenshots'
-if SS.exists():
+if SS.exists() and os.environ.get('GITHUB_WORKFLOW', '').startswith('PWA'):
     (DOCS / 'store').mkdir(exist_ok=True)
     for f in SS.glob('*.png'): shutil.copy(f, DOCS / 'store' / f.name)
     for n in (512, 1024): shutil.copy(ROOT / f'assets/icons/icon-{n}.png', DOCS / 'store' / f'icon-{n}.png')
