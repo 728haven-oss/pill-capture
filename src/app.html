@@ -187,7 +187,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
     <button class="btn" id="btn-share">원본 사진 공유</button>
   </div>
 
-  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>촬영</b>은 한 번에 3장을 연속으로 찍고 사진마다 여러 조건으로 분석해 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
+  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>AI 검출</b>: 실사진으로 학습한 신경망이 알약마다 점 하나씩 찾아 셉니다(모델은 앱 안에 들어 있고 사진은 기기 밖으로 나가지 않습니다). 흰 유리 트레이처럼 학습에 없던 장면은 아직 틀릴 수 있으니, 결과가 이상하면 <b>원본 사진 공유</b>로 보내 주시면 학습에 반영합니다. <b>촬영</b>은 한 번에 3장을 연속으로 찍어 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
 </div>
 
 <div class="paywall" id="paywall" hidden>
@@ -288,10 +288,70 @@ function pickResult(runs){
   const chosen = runs.find(r=>r.total===mode && r.scale===1 && r.thrMul===1 && !r.opt) || runs.find(r=>r.total===mode);
   return {chosen, mode, conf:agree/runs.length, agree, n:runs.length, min:sorted[0], max:sorted[sorted.length-1]};
 }
+// ───────────────────────── 학습형 검출기(AI): 실사진으로 학습한 신경망이 알약 중심점을 하나씩 찍는다(docs/ml/pillnet.*). 모델이 없거나 못 읽으면 규칙 기반으로 동작
+const ML = { ready:false, loading:null, failed:false, warm:false };
+function mlInit(){
+  if(ML.loading || !window.__PC_ML || !window.PillNet) return;
+  ML.loading = PillNet.load(window.__PC_ML.json, window.__PC_ML.bin).then(async()=>{ ML.ready=true;
+    try{ const c=document.createElement('canvas'); c.width=64; c.height=64; await PillNet.run(c); ML.warm=true; }catch(e){ console.warn('ML warm-up', e); }   // 셰이더 컴파일 예열
+  }).catch(e=>{ console.warn('ML 모델을 읽지 못해 규칙 기반으로 동작', e); ML.failed=true; });
+}
+// 중심점 → 알약 객체(색은 중심 주변 원판의 중앙값). 각 점은 정확히 1정(fixed)
+function pillsFromPeaks(peaks, d, w, h){
+  if(!peaks.length) return [];
+  const sizes=peaks.map(p=>p.size).sort((a,b)=>a-b); const medSize=sizes[sizes.length>>1]||10;
+  const out=[];
+  for(const pk of peaks){
+    const size=Math.max(6, Math.min(pk.size||medSize, medSize*2.5)); const r=size/2; const cx=pk.x, cy=pk.y;
+    const rs=[],gs=[],bs=[]; const R=Math.max(2, r*0.55);
+    for(let y=Math.max(0,Math.round(cy-R)); y<=Math.min(h-1,Math.round(cy+R)); y++) for(let x=Math.max(0,Math.round(cx-R)); x<=Math.min(w-1,Math.round(cx+R)); x++){ if((x-cx)**2+(y-cy)**2>R*R) continue; const j=(y*w+x)*4; rs.push(d[j]); gs.push(d[j+1]); bs.push(d[j+2]); }
+    const med=a=>{ if(!a.length) return 128; a.sort((u,v)=>u-v); return a[a.length>>1]; };
+    const rgb=[med(rs),med(gs),med(bs)]; const area=Math.PI*r*r;
+    out.push({cx,cy,a:r,b:r,ang:0,area,relArea:1,elong:1,rgb,hsv:rgb2hsv(rgb[0],rgb[1],rgb[2]),single:true,fixed:1,score:pk.score,ml:true});
+  }
+  const medA=Math.PI*(medSize/2)*(medSize/2); for(const p of out) p.relArea=p.area/medA;
+  return out;
+}
+async function mlRun(src){
+  const r=await PillNet.run(src, 0.4);   // 임계값 0.4: 홀드아웃 45장에서 MAE 최소
+  const w=src.width, h=src.height; const d=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
+  const pills=pillsFromPeaks(r.peaks, d, w, h);
+  const groups = !pills.length ? [] : state.mode==='single' ? [pills.map((_,i)=>i)] : mergeSimilar(pills, cluster(pills, +$('sens').value));
+  groups.sort((a,b)=>b.length-a.length);
+  const res={pills,groups,scale:1,thrMul:1,ml:true}; res.total=totalOf(res);
+  // 점수 여유: 0.6 이상인 점의 비율(애매한 점이 많으면 신뢰도 하락)
+  res.sure = pills.length ? pills.filter(p=>p.score>=0.6).length/pills.length : 1;
+  return res;
+}
+async function analyzeML(srcs, seq, t0){
+  setChip('AI 분석 중…', true);
+  const runs=[];
+  for(let fi=0; fi<srcs.length; fi++){
+    if(seq!==analyzeSeq) return null;
+    try{ const r=await mlRun(srcs[fi]); r.frame=fi; runs.push(r); }catch(e){ console.error('ML 분석 실패 → 규칙 기반', e); state.noML=true; return analyze(srcs.length>1?srcs:undefined); }
+    setChip(`AI 분석 중… ${fi+1}/${srcs.length}`, true);
+  }
+  if(seq!==analyzeSeq) return null;
+  // 연속 촬영이면 최빈값(동률이면 중앙값에 가까운 쪽), 1장이면 그대로. 신뢰도 = 프레임 일치율 × 점수 여유
+  const totals=runs.map(r=>r.total); const sorted=[...totals].sort((a,b)=>a-b); const median=sorted[sorted.length>>1];
+  const freq=new Map(); for(const t of totals) freq.set(t,(freq.get(t)||0)+1);
+  let mode=totals[0], best=-1; for(const [t,c] of freq){ if(c>best || (c===best && Math.abs(t-median)<Math.abs(mode-median))){ best=c; mode=t; } }
+  const tol=Math.max(1, Math.round(mode*0.05)); const agree=totals.filter(t=>Math.abs(t-mode)<=tol).length;
+  const chosen=runs.find(r=>r.total===mode)||runs[0];
+  const conf=Math.min(1, (agree/runs.length) * (0.6 + 0.4*chosen.sure));
+  const pick={chosen, mode, conf, agree, n:runs.length, min:sorted[0], max:sorted[sorted.length-1], ml:true};
+  if(srcs[chosen.frame]!==photo){ const f=srcs[chosen.frame]; photo.width=f.width; photo.height=f.height; overlay.width=f.width; overlay.height=f.height; pctx.drawImage(f,0,0); }
+  state.pills=chosen.pills; state.groups=chosen.groups; state.adjust={}; state.include={}; state.conf=pick; state.selected=-1;
+  render();
+  const ms=Math.round(performance.now()-t0);
+  setChip((state.source||'사진')+' · AI'); $('chip-time').hidden=false; $('chip-time').textContent=`${photo.width}×${photo.height} · ${ms}ms · AI ${runs.length}장`;
+  return pick;
+}
 let analyzeSeq=0;
 function analyze(frames){
   const seq=++analyzeSeq, t0=performance.now();
   const srcs = frames && frames.length ? frames : [photo];
+  if(ML.ready && !state.noML) return analyzeML(srcs, seq, t0);
   const variants = srcs.length>1 ? VARIANTS_BURST : VARIANTS_PHOTO;
   const caches=srcs.map(()=>({}));
   const jobs=[]; srcs.forEach((f,fi)=>variants.forEach(([s,t,o])=>jobs.push([f,fi,s,t,o])));
@@ -1024,7 +1084,7 @@ function renderConf(){
   if(!c || !state.pills.length){ el.hidden=true; return; }
   const lvl = c.conf>=0.75?'높음':c.conf>=0.5?'보통':'낮음';
   el.hidden=false; el.className='conf '+(c.conf>=0.75?'hi':c.conf>=0.5?'mid':'lo');
-  el.innerHTML = (c.min===c.max ? `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 모두 ${c.mode}정`
+  el.innerHTML = (c.ml ? `AI 검출 · 신뢰도 <b>${lvl}</b>` + (c.n>1 ? ` · ${c.n}장 중 ${c.agree}장 일치 (범위 ${c.min}~${c.max}정)` : ` · 점 ${state.pills.length}개`) : c.min===c.max ? `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 모두 ${c.mode}정`
     : `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 중 ${c.agree}회 일치 (범위 ${c.min}~${c.max}정)`)
     + (c.conf<0.5 ? ' · 알약을 살짝 흩고 다시 촬영해 보세요' : '');
 }
@@ -1394,7 +1454,8 @@ $('btn-copy').onclick=async()=>{
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault(); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&(f.type.startsWith('image/')||f.type.startsWith('video/'))) loadFile(f);});
 // 테스트 훅
-window.__pill = { state, analyze, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
+mlInit();
+window.__pill = { state, analyze, analyzeML, mlRun, ML, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
 
 loadSample();
 })();
