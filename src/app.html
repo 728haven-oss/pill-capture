@@ -184,6 +184,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
   <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
     <button class="btn" id="btn-merge">종류 합치기</button>
     <button class="btn" id="btn-copy">결과 복사</button>
+    <button class="btn" id="btn-share">원본 사진 공유</button>
   </div>
 
   <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>촬영</b>은 한 번에 3장을 연속으로 찍고 사진마다 여러 조건으로 분석해 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
@@ -234,7 +235,7 @@ const photo = $('photo'), overlay = $('overlay');
 const pctx = photo.getContext('2d', {willReadFrequently:true});
 const octx = overlay.getContext('2d');
 const PALETTE = ['#FF7A1A','#2E7BFF','#E0369A','#7ED321','#00C2D1','#FFD400','#9B51E0','#FF3B30','#34C759','#A26A2E'];
-let state = { pills:[], groups:[], mode:'auto', selected:-1, merging:false, mergePick:new Set(), source:null, adjust:{}, conf:null };
+let state = { pills:[], groups:[], mode:'auto', selected:-1, merging:false, mergePick:new Set(), source:null, adjust:{}, include:{}, conf:null };
 
 // ───────────────────────── 이미지 로드
 function loadFile(file){
@@ -271,7 +272,7 @@ function runOnce(src, scale, thrMul, extra){
   else { w=W; h=H; d=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data; }
   const pills=segment(d,w,h,Object.assign({thrMul},extra||{}));
   if(scale<1){ const k=1/scale; for(const p of pills){ p.cx*=k; p.cy*=k; p.a*=k; p.b*=k; p.area*=k*k; } } // 좌표·면적을 원래 크기로
-  const groups = state.mode==='single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
+  const groups = state.mode==='single' ? [pills.map((_,i)=>i)] : mergeSimilar(pills, cluster(pills, +$('sens').value));
   groups.sort((a,b)=>b.length-a.length);
   const res={pills,groups,scale,thrMul}; res.total=totalOf(res); return res;
 }
@@ -301,7 +302,7 @@ function analyze(frames){
         if(!runs.length) throw new Error('분석 결과 없음');
         const pick=pickResult(runs); const r=pick.chosen;
         if(srcs[r.frame]!==photo){ const f=srcs[r.frame]; photo.width=f.width; photo.height=f.height; overlay.width=f.width; overlay.height=f.height; pctx.drawImage(f,0,0); }
-        state.pills=r.pills; state.groups=r.groups; state.adjust={}; state.conf=pick; state.selected=-1;
+        state.pills=r.pills; state.groups=r.groups; state.adjust={}; state.include={}; state.conf=pick; state.selected=-1;
         render();
         const ms=Math.round(performance.now()-t0);
         setChip(state.source||'사진'); $('chip-time').hidden=false; $('chip-time').textContent=`${photo.width}×${photo.height} · ${ms}ms · ${pick.n}회 분석`;
@@ -454,12 +455,17 @@ function segment(d, w, h, opt){
       if(good.length >= 1){
         // 밝기 봉우리로 나뉜 조각은 봉우리 하나 = 알약 하나. 조각 면적 중앙값의 2.2배 이하이면 정확히 1정으로 센다(면적 추정의 과대 집계 방지)
         const pa=good.filter(p=>peakSplit.has(p)).map(p=>p.length).sort((x,y)=>x-y); const pmed=pa.length?pa[pa.length>>1]:0;
-        for(const p of good){
+        for(const p0 of good){
+          // 2차 분할: 봉우리로 나뉘었는데도 1알의 1.9배보다 큰 조각(두세 알이 겹친 것)은 봉우리 간격을 좁혀 한 번 더 나눈다
+          let subs=[p0];
+          if(hasRef && peakSplit.has(p0) && p0.length > refA*1.9){ const ps2=blobShape(p0,w); let qs=splitByPeaks(p0,d,w,h,refR*0.8,bgAt((ps2.minx+ps2.maxx)>>1,(ps2.miny+ps2.maxy)>>1)); qs=qs.filter(q=>q.length>=refA*0.6); if(qs.length>=2 && qs.length<=Math.round(p0.length/refA)) subs=qs; }   // 조각 수가 면적 추정치를 넘으면(캡슐이 세로로 갈림) 믿지 않는다
+          for(const p of subs){
           const f=features(p, d, w, refA);
           f[0].relArea=Math.min(f[0].relArea, 1.6);   // 같은 색의 낱알과 한 종류로 묶이게
           f[0].piece=true;
-          if(peakSplit.has(p) && p.length <= pmed*2.2 && p.length <= refA*1.9) f[0].fixed=1;   // 기준 알약의 1.9배를 넘으면 두 알이 붙은 조각일 수 있어 면적 추정에 맡김
+          if(peakSplit.has(p0) && (subs.length>1 || (p.length <= pmed*2.2 && p.length <= refA*1.9))) f[0].fixed=1;   // 기준 알약의 1.9배를 넘으면 두 알이 붙은 조각일 수 있어 면적 추정에 맡김
           pills.push(...f);
+          }
         }
         continue;
       }
@@ -487,6 +493,9 @@ function segment(d, w, h, opt){
     }
   }
   // 색 일관성: 확실한 낱알(single)과 비슷한 색의 후보만 남긴다. 알약은 종류별로 색이 같고, 책상·유리 모서리·그림자 조각은 어느 낱알과도 색이 다르다.
+  // 확실한 낱알: 낱알 모양이면서 기준 알약 색(낱알들의 최대 색 무리)과 맞는 것만. 색이 다른 '낱알 모양' 조각(테두리·자 로고)은 낱알 자격을 잃는다
+  { const sg=pills.filter(p=>p.single); const need=Math.max(2, Math.ceil(sg.length*0.15));
+    for(const p of sg){ let k=0; for(const q of sg) if(colorDist(p.rgb,q.rgb)<=45) k++; if(k<need) p.single=false; } }   // 색이 같은 낱알이 need개 미만이면(고립된 색) 낱알 자격 박탈
   const sure=pills.filter(p=>p.single);
   if(sure.length>=2){
     const near=(p,q)=>colorDist(p.rgb,q.rgb)<=50;
@@ -891,6 +900,22 @@ function featVec(p){
   const [hh,s,v]=p.hsv; const sw=Math.min(1,s*2.2); const hr=hh*Math.PI/180;
   return [Math.cos(hr)*sw*2.2, Math.sin(hr)*sw*2.2, s*2.6, v*2.0, Math.log(Math.max(0.2,p.relArea))*1.0, Math.log(Math.max(1,p.elong))*1.8];
 }
+// 종류 묶기 후처리: 그늘·반사로 갈라진 같은 알약 종류를 합친다(대표색 거리 ≤30, 1정 면적 비 0.6~1.6, 길쭉함 비 0.7~1.4)
+function mergeSimilar(pills, groups){
+  const med=a=>{a=[...a].sort((x,y)=>x-y); return a.length?a[a.length>>1]:0;};
+  const desc=g=>{ const ps=g.map(i=>pills[i]); const sing=ps.filter(p=>p.single); const base=sing.length?sing:ps;
+    return { rgb:[0,1,2].map(k=>med(base.map(p=>p.rgb[k]))), area:med(base.map(p=>p.area)), elong:med(base.map(p=>p.elong)) }; };
+  let gs=groups.map(g=>g.slice()); let changed=true;
+  while(changed && gs.length>1){ changed=false;
+    const ds=gs.map(desc);
+    outer: for(let i=0;i<gs.length;i++) for(let j=i+1;j<gs.length;j++){ const a=ds[i], b=ds[j];
+      const ar=a.area/(b.area||1), er=a.elong/(b.elong||1);
+      if(colorDist(a.rgb,b.rgb)<=30 && ar>=0.6 && ar<=1.6 && er>=0.7 && er<=1.4){ gs[i]=gs[i].concat(gs[j]); gs.splice(j,1); changed=true; break outer; } }
+  }
+  return gs;
+}
+// 낱알이 하나도 없는 종류(테두리 조각·자 눈금·반사광)는 다른 종류에 낱알이 있으면 집계에서 제외(사용자가 '포함'으로 되돌릴 수 있음)
+function noSingleGroups(res){ const has=res.groups.map(g=>g.some(i=>res.pills[i].single)); const any=has.some(x=>x); return res.groups.map((g,gi)=>any && !has[gi]); }
 function cluster(pills, sens){
   const N=pills.length; if(N===0) return [];
   const F=pills.map(featVec);
@@ -913,10 +938,11 @@ function groupColor(gi){ return PALETTE[gi%PALETTE.length]; }
 function unitOf(res,g){ const sing=g.map(i=>res.pills[i]).filter(p=>p.single).map(p=>p.area).sort((a,b)=>a-b); if(sing.length>=2) return sing[sing.length>>1]; /* 확실한 낱알이 있으면 그 중앙값이 1정 */ const as=g.map(i=>res.pills[i].area).sort((a,b)=>a-b); return as.length>=3 ? as[Math.floor(as.length*0.4)] : null; }
 function countOf(res,g,i,u){ const p=res.pills[i]; const r = u ? p.area/u : p.relArea; if(p.fixed) return p.fixed; return Math.min(30, Math.max(1, Math.round(r - 0.15))); }
 function groupTotalOf(res,g){ const u=unitOf(res,g); let c=0; for(const i of g) c+=countOf(res,g,i,u); return c; }
-function totalOf(res){ return res.groups.reduce((s,g)=>s+groupTotalOf(res,g),0); }
+function totalOf(res){ const ex=noSingleGroups(res); return res.groups.reduce((s,g,gi)=>s+(ex[gi]?0:groupTotalOf(res,g)),0); }
 function groupUnit(gi){ return unitOf(state, state.groups[gi]); }
 function estCount(gi,i){ return countOf(state, state.groups[gi], i, groupUnit(gi)); }
-function groupCount(gi){ return groupTotalOf(state, state.groups[gi]) + (state.adjust[gi]||0); }
+function groupExcluded(gi){ if(state.include && state.include[gi]) return false; return noSingleGroups(state)[gi]; }
+function groupCount(gi){ if(groupExcluded(gi)) return 0; return groupTotalOf(state, state.groups[gi]) + (state.adjust[gi]||0); }
 function describe(gi){
   const g=state.groups[gi]; const ps=g.map(i=>state.pills[i]);
   const avg=k=>ps.reduce((s,p)=>s+p[k],0)/ps.length;
@@ -979,16 +1005,17 @@ function renderGroups(){
     const rep=state.pills[g[0]]; const r=Math.max(rep.a,rep.b)*1.35;
     const cc=c.getContext('2d'); cc.drawImage(photo, rep.cx-r, rep.cy-r, 2*r, 2*r, 0,0,88,88);
     const meta=document.createElement('div'); meta.className='meta';
-    const noSingle = state.groups.length>1 && !g.some(i=>state.pills[i].single) && state.groups.some(h=>h.some(i=>state.pills[i].single));
-    meta.innerHTML=`<div class="name"><span class="dot" style="background:${col}"></span>종류 ${gi+1}${noSingle?' <span class="warn-tag">확인 필요</span>':''}</div><div class="desc">${describe(gi)} · ${g.length}개 감지${noSingle?' · 낱알이 없어 자·유리 등 다른 물체일 수 있습니다':''}</div>`;
-    const cnt=document.createElement('div'); cnt.className='count'+(state.adjust[gi]?' adj':''); cnt.textContent=groupCount(gi);
+    const noSingle = noSingleGroups(state)[gi]; const excluded = groupExcluded(gi);
+    meta.innerHTML=`<div class="name"><span class="dot" style="background:${col}"></span>종류 ${gi+1}${noSingle?(excluded?' <span class="warn-tag">집계 제외</span>':' <span class="warn-tag">확인 필요</span>'):''}</div><div class="desc">${describe(gi)} · ${g.length}개 감지${noSingle?(excluded?' · 낱알이 없어 알약이 아닌 것으로 보고 합계에서 뺐습니다':' · 사용자가 합계에 포함'):''}</div>`;
+    const cnt=document.createElement('div'); cnt.className='count'+(state.adjust[gi]?' adj':''); cnt.textContent=excluded ? groupTotalOf(state,g) : groupCount(gi); if(excluded) cnt.style.textDecoration='line-through';
     const adj=document.createElement('div'); adj.className='adjust';
     const up=document.createElement('button'); up.textContent='+'; up.setAttribute('aria-label',`종류 ${gi+1} 개수 1 늘리기`);
     const dn=document.createElement('button'); dn.textContent='−'; dn.setAttribute('aria-label',`종류 ${gi+1} 개수 1 줄이기`);
     up.onclick=e=>{e.stopPropagation(); state.adjust[gi]=(state.adjust[gi]||0)+1; render();};
     dn.onclick=e=>{e.stopPropagation(); if(groupCount(gi)>0){state.adjust[gi]=(state.adjust[gi]||0)-1; render();}};
-    const ex=document.createElement('button'); ex.textContent='제외'; ex.className='exclude'; ex.setAttribute('aria-label',`종류 ${gi+1} 집계에서 제외`); ex.title='이 종류는 알약이 아님 (집계에서 제외)';
-    ex.onclick=e=>{e.stopPropagation(); excludeGroup(gi);};
+    const ex=document.createElement('button'); ex.className='exclude';
+    if(excluded){ ex.textContent='포함'; ex.setAttribute('aria-label',`종류 ${gi+1} 합계에 포함`); ex.title='알약이 맞음 (합계에 포함)'; ex.onclick=e=>{e.stopPropagation(); state.include=state.include||{}; state.include[gi]=true; render();}; }
+    else { ex.textContent='제외'; ex.setAttribute('aria-label',`종류 ${gi+1} 집계에서 제외`); ex.title='이 종류는 알약이 아님 (집계에서 제외)'; ex.onclick=e=>{e.stopPropagation(); excludeGroup(gi);}; }
     adj.append(up,dn,ex);
     el.append(sw,meta,cnt,adj);
     el.onclick=()=>onGroupTap(gi);
@@ -1014,7 +1041,7 @@ function excludeGroup(gi){
   // 해당 알약들을 제거하고 나머지로 인덱스를 다시 매김(보정값은 유지)
   const map=new Map(); const pills=[]; state.pills.forEach((p,i)=>{ if(!drop.has(i)){ map.set(i,pills.length); pills.push(p); } });
   const groups=[], adjust={}; state.groups.forEach((h,i)=>{ if(i===gi) return; adjust[groups.length]=state.adjust[i]||0; groups.push(h.map(j=>map.get(j))); });
-  state.pills=pills; state.groups=groups; state.adjust=adjust; state.selected=-1; cancelMerge(); render();
+  state.pills=pills; state.groups=groups; state.adjust=adjust; state.include={}; state.selected=-1; cancelMerge(); render();
 }
 function applyMerge(){
   const picks=[...state.mergePick].sort((a,b)=>a-b); if(picks.length<2) return;
@@ -1022,7 +1049,7 @@ function applyMerge(){
   const rest=state.groups.filter((_,i)=>!state.mergePick.has(i)); const restAdj={}; state.groups.forEach((_,i)=>{ if(!state.mergePick.has(i)) restAdj[rest.indexOf(state.groups[i])]=state.adjust[i]||0; });
   state.groups=[merged,...rest].sort((a,b)=>b.length-a.length);
   const newAdj={}; state.groups.forEach((g,i)=>{ if(g===merged) newAdj[i]=adj; else { const ri=rest.indexOf(g); if(restAdj[ri]) newAdj[i]=restAdj[ri]; } });
-  state.adjust=newAdj; state.merging=false; state.mergePick.clear(); $('merge-bar').hidden=true; render();
+  state.adjust=newAdj; state.include={}; state.merging=false; state.mergePick.clear(); $('merge-bar').hidden=true; render();
 }
 
 // ───────────────────────── 예시 이미지(합성)
@@ -1103,7 +1130,7 @@ function liveTick(){
       try{
         const pills = segment(pctx.getImageData(0,0,w,h).data, w, h);
         state.pills = pills;
-        state.groups = state.mode==='single' ? [pills.map((_,i)=>i)] : cluster(pills, +$('sens').value);
+        state.groups = state.mode==='single' ? [pills.map((_,i)=>i)] : mergeSimilar(pills, cluster(pills, +$('sens').value));
         state.groups.sort((a,b)=>b.length-a.length);
         state.adjust = {}; state.conf = null;
         // 흔들림 완화: 최근 5프레임 합계의 중앙값을 안내 문구에 표시
@@ -1278,11 +1305,22 @@ $('btn-file').onclick=()=>$('file-pick').click();
 $('file-camera').onchange=e=>{loadFile(e.target.files[0]); e.target.value='';};
 $('file-pick').onchange=e=>{loadFile(e.target.files[0]); e.target.value='';};
 $('btn-sample').onclick=loadSample;
-$('sens').oninput=()=>{ if(state.pills.length){ state.groups = state.mode==='single'?[state.pills.map((_,i)=>i)]:cluster(state.pills,+$('sens').value); state.groups.sort((a,b)=>b.length-a.length); state.adjust={}; state.selected=-1; cancelMerge(); render(); } };
+$('sens').oninput=()=>{ if(state.pills.length){ state.groups = state.mode==='single'?[state.pills.map((_,i)=>i)]:mergeSimilar(state.pills, cluster(state.pills,+$('sens').value)); state.groups.sort((a,b)=>b.length-a.length); state.adjust={}; state.include={}; state.selected=-1; cancelMerge(); render(); } };
 $('show-num').onchange=drawOverlay;
 $('mode-auto').onclick=()=>setMode('auto'); $('mode-single').onclick=()=>setMode('single');
 function setMode(m){ state.mode=m; $('mode-auto').setAttribute('aria-pressed',m==='auto'); $('mode-single').setAttribute('aria-pressed',m==='single'); $('sens').disabled = m==='single'; $('sens').oninput(); }
 $('btn-merge').onclick=startMerge; $('merge-cancel').onclick=cancelMerge; $('merge-apply').onclick=applyMerge;
+// 분석에 쓴 원본 사진(표시 없음)을 공유/저장 — 인식 문제 제보용
+$('btn-share').onclick=async()=>{
+  if(!photo.width) return;
+  const blob=await new Promise(r=>photo.toBlob(r,'image/jpeg',0.92)); if(!blob){ alert('사진을 만들 수 없습니다'); return; }
+  const name=`pillcapture_${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.jpg`;
+  const file=new File([blob],name,{type:'image/jpeg'});
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){ await navigator.share({files:[file], title:'알약캡쳐 원본 사진'}); return; }
+  }catch(e){ if(e && e.name==='AbortError') return; console.warn(e); }
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; a.target='_blank'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
+};
 $('btn-copy').onclick=async()=>{
   const lines=state.groups.map((g,i)=>`종류 ${i+1} (${describe(i)}): ${groupCount(i)}정`);
   const total=state.groups.reduce((s,_,i)=>s+groupCount(i),0);
