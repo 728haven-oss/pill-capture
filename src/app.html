@@ -289,13 +289,26 @@ function pickResult(runs){
   return {chosen, mode, conf:agree/runs.length, agree, n:runs.length, min:sorted[0], max:sorted[sorted.length-1]};
 }
 // ───────────────────────── 학습형 검출기(AI): 실사진으로 학습한 신경망이 알약 중심점을 하나씩 찍는다(docs/ml/pillnet.*). 모델이 없거나 못 읽으면 규칙 기반으로 동작
-const ML = { ready:false, loading:null, failed:false, warm:false };
+const ML = { ready:false, loading:null, failed:false, warm:false, err:'', backend:'', ms:0 };
+const errStr=e=>String(e&&e.message||e).slice(0,120);
 function mlInit(){
-  if(ML.loading || !window.__PC_ML || !window.PillNet) return;
-  ML.loading = PillNet.load(window.__PC_ML.json, window.__PC_ML.bin).then(async()=>{ ML.ready=true;
-    try{ const c=document.createElement('canvas'); c.width=64; c.height=64; await PillNet.run(c); ML.warm=true; }catch(e){ console.warn('ML warm-up', e); }   // 셰이더 컴파일 예열
-  }).catch(e=>{ console.warn('ML 모델을 읽지 못해 규칙 기반으로 동작', e); ML.failed=true; });
+  if(ML.loading || !window.__PC_ML) return;
+  if(!window.PillNet || typeof tf==='undefined'){ ML.failed=true; ML.err='스크립트 미로드'; return; }
+  const t0=performance.now();
+  ML.loading = (async()=>{
+    try{ await tf.ready(); }catch(e){}
+    if(tf.getBackend()!=='webgl'){ try{ await tf.setBackend('webgl'); }catch(e){} }
+    if(!tf.getBackend()){ try{ await tf.setBackend('cpu'); }catch(e){} }
+    ML.backend=tf.getBackend()||'?';
+    await PillNet.load(window.__PC_ML.json, window.__PC_ML.bin);
+    ML.ready=true;
+    try{ const c=document.createElement('canvas'); c.width=64; c.height=64; await PillNet.run(c); ML.warm=true; }   // 셰이더 컴파일 예열
+    catch(e){ console.warn('ML warm-up', e); ML.err='예열 실패: '+errStr(e); if(ML.backend==='webgl'){ try{ await tf.setBackend('cpu'); ML.backend='cpu'; await PillNet.run(c0()); ML.warm=true; ML.err=''; }catch(e2){ ML.err='실행 실패: '+errStr(e2); ML.ready=false; ML.failed=true; } } }
+    ML.ms=Math.round(performance.now()-t0);
+  })().catch(e=>{ console.warn('ML 모델을 읽지 못해 규칙 기반으로 동작', e); ML.failed=true; ML.err='모델 로드 실패: '+errStr(e); });
+  function c0(){ const c=document.createElement('canvas'); c.width=64; c.height=64; return c; }
 }
+function mlStatus(){ return !window.__PC_ML ? '' : ML.ready ? `AI 준비됨 (${ML.backend}, ${ML.ms}ms)` : ML.failed ? 'AI 사용 불가 · '+ML.err : 'AI 모델 로딩 중…'; }
 // 중심점 → 알약 객체(색은 중심 주변 원판의 중앙값). 각 점은 정확히 1정(fixed)
 function pillsFromPeaks(peaks, d, w, h){
   if(!peaks.length) return [];
@@ -328,7 +341,7 @@ async function analyzeML(srcs, seq, t0){
   const runs=[];
   for(let fi=0; fi<srcs.length; fi++){
     if(seq!==analyzeSeq) return null;
-    try{ const r=await mlRun(srcs[fi]); r.frame=fi; runs.push(r); }catch(e){ console.error('ML 분석 실패 → 규칙 기반', e); state.noML=true; return analyze(srcs.length>1?srcs:undefined); }
+    try{ const r=await mlRun(srcs[fi]); r.frame=fi; runs.push(r); }catch(e){ console.error('ML 분석 실패 → 규칙 기반', e); state.noML=true; ML.err='분석 실패: '+errStr(e); return analyze(srcs.length>1?srcs:undefined); }
     setChip(`AI 분석 중… ${fi+1}/${srcs.length}`, true);
   }
   if(seq!==analyzeSeq) return null;
@@ -348,9 +361,10 @@ async function analyzeML(srcs, seq, t0){
   return pick;
 }
 let analyzeSeq=0;
-function analyze(frames){
+async function analyze(frames){
   const seq=++analyzeSeq, t0=performance.now();
   const srcs = frames && frames.length ? frames : [photo];
+  if(ML.loading && !ML.ready && !ML.failed){ setChip('AI 모델 준비 중…', true); await Promise.race([ML.loading, new Promise(r=>setTimeout(r,20000))]); if(seq!==analyzeSeq) return null; }   // 모델이 아직 로딩 중이면 기다렸다가(최대 20초) AI 로 분석
   if(ML.ready && !state.noML) return analyzeML(srcs, seq, t0);
   const variants = srcs.length>1 ? VARIANTS_BURST : VARIANTS_PHOTO;
   const caches=srcs.map(()=>({}));
@@ -1086,7 +1100,8 @@ function renderConf(){
   el.hidden=false; el.className='conf '+(c.conf>=0.75?'hi':c.conf>=0.5?'mid':'lo');
   el.innerHTML = (c.ml ? `AI 검출 · 신뢰도 <b>${lvl}</b>` + (c.n>1 ? ` · ${c.n}장 중 ${c.agree}장 일치 (범위 ${c.min}~${c.max}정)` : ` · 점 ${state.pills.length}개`) : c.min===c.max ? `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 모두 ${c.mode}정`
     : `신뢰도 <b>${lvl}</b> · ${c.n}회 분석 중 ${c.agree}회 일치 (범위 ${c.min}~${c.max}정)`)
-    + (c.conf<0.5 ? ' · 알약을 살짝 흩고 다시 촬영해 보세요' : '');
+    + (c.conf<0.5 ? ' · 알약을 살짝 흩고 다시 촬영해 보세요' : '')
+    + (!c.ml && window.__PC_ML ? `<br><small>규칙 기반 결과 · ${state.noML ? 'AI '+ML.err : mlStatus()}</small>` : '');
 }
 function drawOverlay(){
   const w=overlay.width,h=overlay.height; octx.clearRect(0,0,w,h);
