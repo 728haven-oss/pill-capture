@@ -289,7 +289,7 @@ function pickResult(runs){
   return {chosen, mode, conf:agree/runs.length, agree, n:runs.length, min:sorted[0], max:sorted[sorted.length-1]};
 }
 // ───────────────────────── 학습형 검출기(AI): 실사진으로 학습한 신경망이 알약 중심점을 하나씩 찍는다(docs/ml/pillnet.*). 모델이 없거나 못 읽으면 규칙 기반으로 동작
-const ML = { ready:false, loading:null, failed:false, warm:false, err:'', backend:'', ms:0 };
+const ML = { ready:false, loading:null, failed:false, warm:false, err:'', backend:'', ms:0, kind:'' };
 const errStr=e=>String(e&&e.message||e).slice(0,120);
 function mlInit(){
   if(ML.loading || !window.__PC_ML) return;
@@ -300,15 +300,18 @@ function mlInit(){
     if(tf.getBackend()!=='webgl'){ try{ await tf.setBackend('webgl'); }catch(e){} }
     if(!tf.getBackend()){ try{ await tf.setBackend('cpu'); }catch(e){} }
     ML.backend=tf.getBackend()||'?';
-    await PillNet.load(window.__PC_ML.json, window.__PC_ML.bin);
+    if(window.__PC_ML.yolo && window.PillYolo){   // 상자 검출기(YOLO)가 있으면 우선, 실패하면 중심점 검출기
+      try{ await PillYolo.load(window.__PC_ML.yolo); ML.kind='yolo'; }catch(e){ console.warn('YOLO 로드 실패 → pillnet', e); ML.err='YOLO 로드 실패: '+errStr(e); }
+    }
+    if(ML.kind!=='yolo'){ await PillNet.load(window.__PC_ML.json, window.__PC_ML.bin); ML.kind='pillnet'; }
     ML.ready=true;
-    try{ const c=document.createElement('canvas'); c.width=64; c.height=64; await PillNet.run(c); ML.warm=true; }   // 셰이더 컴파일 예열
-    catch(e){ console.warn('ML warm-up', e); ML.err='예열 실패: '+errStr(e); if(ML.backend==='webgl'){ try{ await tf.setBackend('cpu'); ML.backend='cpu'; await PillNet.run(c0()); ML.warm=true; ML.err=''; }catch(e2){ ML.err='실행 실패: '+errStr(e2); ML.ready=false; ML.failed=true; } } }
+    try{ const c=document.createElement('canvas'); c.width=64; c.height=64; await (ML.kind==='yolo' ? PillYolo.run(c, 0.5) : PillNet.run(c)); ML.warm=true; }   // 셰이더 컴파일 예열
+    catch(e){ console.warn('ML warm-up', e); ML.err='예열 실패: '+errStr(e); if(ML.backend==='webgl'){ try{ await tf.setBackend('cpu'); ML.backend='cpu'; await (ML.kind==='yolo' ? PillYolo.run(c0(), 0.5) : PillNet.run(c0())); ML.warm=true; ML.err=''; }catch(e2){ ML.err='실행 실패: '+errStr(e2); ML.ready=false; ML.failed=true; } } }
     ML.ms=Math.round(performance.now()-t0);
   })().catch(e=>{ console.warn('ML 모델을 읽지 못해 규칙 기반으로 동작', e); ML.failed=true; ML.err='모델 로드 실패: '+errStr(e); });
   function c0(){ const c=document.createElement('canvas'); c.width=64; c.height=64; return c; }
 }
-function mlStatus(){ return !window.__PC_ML ? '' : ML.ready ? `AI 준비됨 (${ML.backend}, ${ML.ms}ms)` : ML.failed ? 'AI 사용 불가 · '+ML.err : 'AI 모델 로딩 중…'; }
+function mlStatus(){ return !window.__PC_ML ? '' : ML.ready ? `AI 준비됨 (${ML.kind}/${ML.backend}, ${ML.ms}ms)` : ML.failed ? 'AI 사용 불가 · '+ML.err : 'AI 모델 로딩 중…'; }
 // 중심점 → 알약 객체(색은 중심 주변 원판의 중앙값). 각 점은 정확히 1정(fixed)
 function pillsFromPeaks(peaks, d, w, h){
   if(!peaks.length) return [];
@@ -319,16 +322,21 @@ function pillsFromPeaks(peaks, d, w, h){
     const rs=[],gs=[],bs=[]; const R=Math.max(2, r*0.55);
     for(let y=Math.max(0,Math.round(cy-R)); y<=Math.min(h-1,Math.round(cy+R)); y++) for(let x=Math.max(0,Math.round(cx-R)); x<=Math.min(w-1,Math.round(cx+R)); x++){ if((x-cx)**2+(y-cy)**2>R*R) continue; const j=(y*w+x)*4; rs.push(d[j]); gs.push(d[j+1]); bs.push(d[j+2]); }
     const med=a=>{ if(!a.length) return 128; a.sort((u,v)=>u-v); return a[a.length>>1]; };
-    const rgb=[med(rs),med(gs),med(bs)]; const area=Math.PI*r*r;
-    out.push({cx,cy,a:r,b:r,ang:0,area,relArea:1,elong:1,rgb,hsv:rgb2hsv(rgb[0],rgb[1],rgb[2]),single:true,fixed:1,score:pk.score,ml:true});
+    const rgb=[med(rs),med(gs),med(bs)];
+    // 상자(YOLO)는 알약 기울기에 따라 모양이 달라지므로 종류 묶기에는 색만 쓰도록 원형(elong 1)으로 둔다
+    out.push({cx,cy,a:r,b:r,ang:0,area:Math.PI*r*r,relArea:1,elong:1,rgb,hsv:rgb2hsv(rgb[0],rgb[1],rgb[2]),single:true,fixed:1,score:pk.score,ml:true});
   }
   const medA=Math.PI*(medSize/2)*(medSize/2); for(const p of out) p.relArea=p.area/medA;
   return out;
 }
 async function mlRun(src){
-  const r=await PillNet.run(src, 0.4);   // 임계값 0.4: 홀드아웃 45장에서 MAE 최소
+  let peaks;
+  if(ML.kind==='yolo'){   // 상자 → 중심점+크기(타원 반지름은 상자 반폭/반높이)
+    const r=await PillYolo.run(src, window.__PC_ML.yoloConf||0.35, 0.5);
+    peaks=r.boxes.map(b=>({x:b.x, y:b.y, score:b.score, size:(b.w+b.h)/2, bw:b.w, bh:b.h}));
+  } else { const r=await PillNet.run(src, 0.4); peaks=r.peaks; }   // 임계값 0.4: 홀드아웃 45장에서 MAE 최소
   const w=src.width, h=src.height; const d=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;
-  const pills=pillsFromPeaks(r.peaks, d, w, h);
+  const pills=pillsFromPeaks(peaks, d, w, h);
   const groups = !pills.length ? [] : state.mode==='single' ? [pills.map((_,i)=>i)] : mergeSimilar(pills, cluster(pills, +$('sens').value));
   groups.sort((a,b)=>b.length-a.length);
   const res={pills,groups,scale:1,thrMul:1,ml:true}; res.total=totalOf(res);
