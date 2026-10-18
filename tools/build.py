@@ -52,7 +52,7 @@ body = body + '\n' + AUTH_JS if AUTH_JS else body
 # ── 학습형 알약 검출기 (src/ml: tf.min.js, pillnet.js, pillnet.json, pillnet.bin) → docs/ml/
 #  있으면 <script> 로 주입하고 앱이 시작 시 모델을 읽는다. 없으면 규칙 기반만 동작
 ML_DIR = ROOT / 'src/ml'
-ML_TAGS = ''
+ML_TAGS = ''; YOLO_FILES = []
 if (ML_DIR / 'pillnet.bin').exists():
     (DOCS / 'ml').mkdir(exist_ok=True)
     for f in ('tf.min.js', 'pillnet.js', 'pillnet.json', 'pillnet.bin'):
@@ -70,6 +70,10 @@ if (ML_DIR / 'pillnet.bin').exists():
         shutil.copy(ML_DIR / 'pillyolo.js', DOCS / 'ml' / 'pillyolo.js'); YOLO_FILES.append('./ml/pillyolo.js')
         meta = json.loads((YD / 'meta.json').read_text()) if (YD / 'meta.json').exists() else {}
         ML_TAGS += f'\n<script src="ml/pillyolo.js"></script>\n<script>window.__PC_ML.yolo="ml/yolo/model.json?v={yver}";window.__PC_ML.yoloConf={meta.get("conf", 0.35)};</script>'
+        # 앱 번들 크기(Play 업로드 한도) 때문에 YOLO 가 있으면 중심점 검출기(pillnet.bin 1.6MB)는 빼고 YOLO 실패 시 규칙 기반으로 바로 전환
+        for f in ('pillnet.json', 'pillnet.bin'):
+            (DOCS / 'ml' / f).unlink(missing_ok=True)
+        ML_TAGS = ML_TAGS.replace(f'json:"ml/pillnet.json?v={mlver}",bin:"ml/pillnet.bin?v={mlver}"', '')
         print('yolo detector ON', yver, meta)
 else:
     print('ml detector OFF')
@@ -114,7 +118,7 @@ manifest = {
 (DOCS / 'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
 sw = f'''const C = 'pillcapture-{ver}';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'{', "./ml/tf.min.js", "./ml/pillnet.js", "./ml/pillnet.json", "./ml/pillnet.bin"' if ML_TAGS else ''}{''.join(', "%s"' % f for f in (YOLO_FILES if ML_TAGS else []))}];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'{(', "./ml/tf.min.js", "./ml/pillnet.js"' + ('' if YOLO_FILES else ', "./ml/pillnet.json", "./ml/pillnet.bin"')) if ML_TAGS else ''}{''.join(', "%s"' % f for f in (YOLO_FILES if ML_TAGS else []))}];
 self.addEventListener('install', e => {{ e.waitUntil(caches.open(C).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); }});
 self.addEventListener('activate', e => {{ e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); }});
 self.addEventListener('fetch', e => {{
