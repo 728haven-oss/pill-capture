@@ -60,6 +60,17 @@ if (ML_DIR / 'pillnet.bin').exists():
     mlver = hashlib.sha1((ML_DIR / 'pillnet.bin').read_bytes()).hexdigest()[:8]
     ML_TAGS = f'<script src="ml/tf.min.js"></script>\n<script src="ml/pillnet.js"></script>\n<script>window.__PC_ML={{json:"ml/pillnet.json?v={mlver}",bin:"ml/pillnet.bin?v={mlver}"}};</script>'
     print('ml detector ON', mlver)
+    # YOLO 상자 검출기(src/ml/yolo: model.json + group*.bin + meta.json) 가 있으면 우선 사용
+    YD = ML_DIR / 'yolo'; YOLO_FILES = []
+    if (YD / 'model.json').exists() and (ML_DIR / 'pillyolo.js').exists():
+        (DOCS / 'ml' / 'yolo').mkdir(exist_ok=True)
+        yver = hashlib.sha1(b''.join(sorted(f.read_bytes() for f in YD.glob('*.bin')))).hexdigest()[:8]
+        for f in sorted(YD.iterdir()):
+            if f.is_file(): shutil.copy(f, DOCS / 'ml' / 'yolo' / f.name); YOLO_FILES.append('./ml/yolo/' + f.name)
+        shutil.copy(ML_DIR / 'pillyolo.js', DOCS / 'ml' / 'pillyolo.js'); YOLO_FILES.append('./ml/pillyolo.js')
+        meta = json.loads((YD / 'meta.json').read_text()) if (YD / 'meta.json').exists() else {}
+        ML_TAGS += f'\n<script src="ml/pillyolo.js"></script>\n<script>window.__PC_ML.yolo="ml/yolo/model.json?v={yver}";window.__PC_ML.yoloConf={meta.get("conf", 0.35)};</script>'
+        print('yolo detector ON', yver, meta)
 else:
     print('ml detector OFF')
 ver = hashlib.sha1(body.encode()).hexdigest()[:8]
@@ -103,7 +114,7 @@ manifest = {
 (DOCS / 'manifest.webmanifest').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
 sw = f'''const C = 'pillcapture-{ver}';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'{', "./ml/tf.min.js", "./ml/pillnet.js", "./ml/pillnet.json", "./ml/pillnet.bin"' if ML_TAGS else ''}];
+const FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'{', "./ml/tf.min.js", "./ml/pillnet.js", "./ml/pillnet.json", "./ml/pillnet.bin"' if ML_TAGS else ''}{''.join(', "%s"' % f for f in (YOLO_FILES if ML_TAGS else []))}];
 self.addEventListener('install', e => {{ e.waitUntil(caches.open(C).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); }});
 self.addEventListener('activate', e => {{ e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())); }});
 self.addEventListener('fetch', e => {{
