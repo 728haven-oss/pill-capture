@@ -40,9 +40,10 @@ for src, sp in [('train', 'train'), ('valid', 'val'), ('test', 'test')]:
         if os.path.exists(lab):
             for l in open(lab):
                 v = list(map(float, l.split()[1:]))
-                if len(v) < 6: continue
-                xs, ys = v[0::2], v[1::2]; x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-                lines.append(f'0 {(x0+x1)/2:.5f} {(y0+y1)/2:.5f} {x1-x0:.5f} {y1-y0:.5f}')
+                if len(v) == 4: lines.append(f'0 {v[0]:.5f} {v[1]:.5f} {v[2]:.5f} {v[3]:.5f}')   # 이미 bbox 형식(no_error_* 사진)
+                elif len(v) >= 6:   # 폴리곤 → bbox
+                    xs, ys = v[0::2], v[1::2]; x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+                    lines.append(f'0 {(x0+x1)/2:.5f} {(y0+y1)/2:.5f} {x1-x0:.5f} {y1-y0:.5f}')
         put(img, lines, sp, 'cp_' + key)
 # 3) Pill Detection (국내약 74종 → 1클래스), 150장은 val
 d = f'{WORK}/kr'; zipfile.ZipFile(KR_ZIP).extractall(d)
@@ -54,6 +55,7 @@ for i, img in enumerate(imgs):
 # 4) 사용자 트레이 라벨 (3번 복제)
 if USER_LAB and os.path.exists(f'{USER_LAB}/tri30.jpg'):
     lines = [l.strip() for l in open(f'{USER_LAB}/tri30.txt') if l.strip()]
-    for k in range(3): put(f'{USER_LAB}/tri30.jpg', lines, 'train', f'user_tri30_{k}', maxside=900)
+    REP = int(os.environ.get('USER_REPEAT', 40))   # 사용자 장면(흰 알약+청록 유리 트레이)은 희귀하므로 크게 오버샘플(모자이크·회전·색 증강으로 변형됨)
+    for k in range(REP): put(f'{USER_LAB}/tri30.jpg', lines, 'train', f'user_tri30_{k}', maxside=900)
 open(f'{OUT}/data.yaml', 'w').write(f"path: {OUT}\ntrain: train/images\nval: val/images\ntest: test/images\nnc: 1\nnames: ['pill']\n")
 print('dataset', n)
