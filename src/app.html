@@ -303,7 +303,7 @@ function mlInit(){
     if(window.__PC_ML.yolo && window.PillYolo){   // 상자 검출기(YOLO)가 있으면 우선, 실패하면 중심점 검출기
       try{ await PillYolo.load(window.__PC_ML.yolo); ML.kind='yolo'; }catch(e){ console.warn('YOLO 로드 실패 → pillnet', e); ML.err='YOLO 로드 실패: '+errStr(e); }
     }
-    if(ML.kind!=='yolo'){ await PillNet.load(window.__PC_ML.json, window.__PC_ML.bin); ML.kind='pillnet'; }
+    if(ML.kind!=='yolo'){ if(!window.__PC_ML.json) throw new Error(ML.err||'모델 없음'); await PillNet.load(window.__PC_ML.json, window.__PC_ML.bin); ML.kind='pillnet'; }
     ML.ready=true;
     try{ const c=document.createElement('canvas'); c.width=64; c.height=64; await (ML.kind==='yolo' ? PillYolo.run(c, 0.5) : PillNet.run(c)); ML.warm=true; }   // 셰이더 컴파일 예열
     catch(e){ console.warn('ML warm-up', e); ML.err='예열 실패: '+errStr(e); if(ML.backend==='webgl'){ try{ await tf.setBackend('cpu'); ML.backend='cpu'; await (ML.kind==='yolo' ? PillYolo.run(c0(), 0.5) : PillNet.run(c0())); ML.warm=true; ML.err=''; }catch(e2){ ML.err='실행 실패: '+errStr(e2); ML.ready=false; ML.failed=true; } } }
