@@ -133,6 +133,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
 .paywall .close{position:absolute;right:14px;top:10px;border:0;background:transparent;font-size:22px;color:var(--ink-3);cursor:pointer}
 .paywall .sheet{position:relative}
 .paywall .status{font-size:12.5px;color:var(--warn);min-height:1.2em;margin-top:8px}
+.fb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink-2)}
+.fb .btn{padding:6px 12px}
+.fb .fb-done{color:var(--accent);font-weight:600}
+.hist-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 12px;max-height:46vh;overflow:auto}
+.hist-item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:6px;font-size:13px}
+.hist-item img{width:56px;height:56px;object-fit:cover;border-radius:8px;flex:none;background:var(--line)}
+.hist-item .meta{flex:1;min-width:0;line-height:1.45}
+.hist-item .meta b{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.hist-item .tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid var(--line)}
+.hist-item .tag.ok{color:var(--accent);border-color:var(--accent)}
+.hist-item .tag.ng{color:var(--warn);border-color:var(--warn)}
+.hist-item .del{border:0;background:transparent;color:var(--ink-3);font-size:18px;cursor:pointer;padding:4px 6px}
+.hist-empty{color:var(--ink-3);font-size:13px;padding:12px 0}
+.hist-opt{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);margin-top:6px}
 .note b{color:var(--ink-2);font-weight:600}
 @media (max-width:400px){.summary .total{font-size:38px}.mode button{padding:5px 9px}}
 </style>
@@ -171,6 +185,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
     <div class="total"><span id="total">0</span><small>정</small></div>
     <div class="kinds"><b id="kinds">0</b>종류 인식</div>
     <div class="conf" id="conf" hidden></div>
+    <div class="fb" id="fb" hidden><span id="fb-q">결과가 맞나요?</span><button class="btn" id="fb-ok">맞아요</button><button class="btn" id="fb-ng">틀렸어요</button></div>
     <div class="hint" id="hint">종류 줄을 누르면 사진에서 강조됩니다. 잘못 나뉜 종류는 <b>합치기</b>로 하나로 묶을 수 있습니다.</div>
   </div>
 
@@ -185,9 +200,26 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
     <button class="btn" id="btn-merge">종류 합치기</button>
     <button class="btn" id="btn-copy">결과 복사</button>
     <button class="btn" id="btn-share">원본 사진 공유</button>
+    <button class="btn" id="btn-hist">분석 기록</button>
   </div>
 
-  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>AI 검출</b>: 실사진으로 학습한 신경망이 알약마다 점 하나씩 찾아 셉니다(모델은 앱 안에 들어 있고 사진은 기기 밖으로 나가지 않습니다). 흰 유리 트레이처럼 학습에 없던 장면은 아직 틀릴 수 있으니, 결과가 이상하면 <b>원본 사진 공유</b>로 보내 주시면 학습에 반영합니다. 학습 데이터: Pill-Counter(TetraHikari), CountingPills·Pill Detection(Roboflow Universe, CC BY 4.0). <b>촬영</b>은 한 번에 3장을 연속으로 찍어 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 전송되지 않습니다.</p>
+  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>AI 검출</b>: 실사진으로 학습한 신경망이 알약마다 점 하나씩 찾아 셉니다(모델은 앱 안에 들어 있고 사진은 기기 밖으로 나가지 않습니다). 흰 유리 트레이처럼 학습에 없던 장면은 아직 틀릴 수 있으니, 결과가 이상하면 <b>원본 사진 공유</b>로 보내 주시면 학습에 반영합니다. 학습 데이터: Pill-Counter(TetraHikari), CountingPills·Pill Detection(Roboflow Universe, CC BY 4.0). <b>촬영</b>은 한 번에 3장을 연속으로 찍어 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 자동 전송되지 않습니다. 분석한 사진은 <b>분석 기록</b>에 이 기기 안에만 최근 50장까지 보관되며(끌 수 있음), 결과가 틀렸다면 <b>틀렸어요</b>를 눌러 실제 개수를 적고 <b>분석 기록 → 보내기</b>로 보내 주세요.</p>
+</div>
+
+<div class="paywall" id="hist" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hist-title">
+    <button class="close" id="hist-close" aria-label="닫기">×</button>
+    <h2 id="hist-title">분석 기록</h2>
+    <p class="lead">최근 분석한 사진이 <b>이 기기 안에만</b> 최대 50장까지 보관됩니다. 자동으로 전송되지 않으며, 아래 <b>보내기</b>를 누를 때만 직접 고른 앱(카톡·메일 등)으로 공유됩니다. 틀린 결과를 보내 주시면 인식 정확도를 높이는 데 사용합니다.</p>
+    <div class="hist-list" id="hist-list"></div>
+    <div class="cta">
+      <button class="btn primary" id="hist-send-ng">틀린 결과만 보내기</button>
+      <button class="btn" id="hist-send-all">모두 보내기</button>
+      <button class="btn ghost" id="hist-clear">기록 모두 지우기</button>
+    </div>
+    <label class="hist-opt"><input type="checkbox" id="hist-on" checked> 분석한 사진을 이 기기에 기록</label>
+    <div class="status" id="hist-status"></div>
+  </div>
 </div>
 
 <div class="paywall" id="paywall" hidden>
@@ -255,6 +287,7 @@ function setImage(img, label){
   const w = Math.round((img.naturalWidth||img.width)*s), h = Math.round((img.naturalHeight||img.height)*s);
   photo.width = w; photo.height = h; overlay.width = w; overlay.height = h;
   pctx.drawImage(img, 0, 0, w, h);
+  state.srcImg = img;   // 분석 기록용 고해상도 원본(점 좌표는 0~1 정규화라 해상도 무관)
   state.source = label; state.adjust = {}; state.selected=-1; cancelMerge();
   analyze();
 }
@@ -366,6 +399,7 @@ async function analyzeML(srcs, seq, t0){
   render();
   const ms=Math.round(performance.now()-t0);
   setChip((state.source||'사진')+' · AI'); $('chip-time').hidden=false; $('chip-time').textContent=`${photo.width}×${photo.height} · ${ms}ms · AI ${runs.length}장`;
+  histOnResult();
   return pick;
 }
 let analyzeSeq=0;
@@ -389,6 +423,7 @@ async function analyze(frames){
         render();
         const ms=Math.round(performance.now()-t0);
         setChip(state.source||'사진'); $('chip-time').hidden=false; $('chip-time').textContent=`${photo.width}×${photo.height} · ${ms}ms · ${pick.n}회 분석`;
+        histOnResult();
       }catch(e){ console.error(e); setChip('분석 실패: '+e.message); }
       resolve(state.conf);
     };
@@ -1458,13 +1493,8 @@ $('btn-merge').onclick=startMerge; $('merge-cancel').onclick=cancelMerge; $('mer
 // 분석에 쓴 원본 사진(표시 없음)을 공유/저장 — 인식 문제 제보용
 $('btn-share').onclick=async()=>{
   if(!photo.width) return;
-  const blob=await new Promise(r=>photo.toBlob(r,'image/jpeg',0.92)); if(!blob){ alert('사진을 만들 수 없습니다'); return; }
-  const name=`pillcapture_${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.jpg`;
-  const file=new File([blob],name,{type:'image/jpeg'});
-  try{
-    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){ await navigator.share({files:[file], title:'알약캡쳐 원본 사진'}); return; }
-  }catch(e){ if(e && e.name==='AbortError') return; console.warn(e); }
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; a.target='_blank'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
+  const blob=await new Promise(r=>(state.srcImg? hiResCanvas() : photo).toBlob(r,'image/jpeg',0.92)); if(!blob){ alert('사진을 만들 수 없습니다'); return; }
+  await shareBlob(blob, `pillcapture_${stamp()}.jpg`, '알약캡쳐 원본 사진');
 };
 $('btn-copy').onclick=async()=>{
   const lines=state.groups.map((g,i)=>`종류 ${i+1} (${describe(i)}): ${groupCount(i)}정`);
@@ -1473,12 +1503,159 @@ $('btn-copy').onclick=async()=>{
   const txt=`알약캡쳐 결과 · ${new Date().toLocaleString('ko-KR')}\n${lines.join('\n')}\n합계: ${total}정${confLine}`;
   try{ await navigator.clipboard.writeText(txt); $('btn-copy').textContent='복사됨'; setTimeout(()=>$('btn-copy').textContent='결과 복사',1400); }catch{ alert(txt); }
 };
+// ───────────────────────── 분석 기록 (기기 안에만 보관, 사용자가 '보내기'를 누를 때만 공유)
+const HIST_MAX = 50;
+const stamp = () => new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+function hiResCanvas(){   // 갤러리 사진이면 원본에서 긴 변 1600px 로 다시 그림(학습 라벨링용), 아니면 분석 캔버스 그대로
+  const img=state.srcImg; if(!img) return photo;
+  const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height; const s=Math.min(1, 1600/Math.max(W,H));
+  if(s*Math.max(W,H) <= Math.max(photo.width,photo.height)) return photo;
+  const c=document.createElement('canvas'); c.width=Math.round(W*s); c.height=Math.round(H*s); c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c;
+}
+const Hist = (() => {
+  let dbp=null;
+  const open = () => dbp || (dbp = new Promise((res,rej)=>{
+    if(!window.indexedDB) return rej(new Error('no indexedDB'));
+    const r=indexedDB.open('pillcapture', 1);
+    r.onupgradeneeded=()=>{ r.result.createObjectStore('hist', {keyPath:'id'}); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  }));
+  const tx = async (mode, fn) => { const db=await open(); return new Promise((res,rej)=>{ const t=db.transaction('hist', mode); const st=t.objectStore('hist'); let out; Promise.resolve(fn(st)).then(v=>out=v); t.oncomplete=()=>res(out); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); }); };
+  const req = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+  return {
+    put: rec => tx('readwrite', st=>st.put(rec)),
+    get: id => tx('readonly', st=>req(st.get(id))),
+    all: async () => (await tx('readonly', st=>req(st.getAll()))).sort((a,b)=>b.ts-a.ts),
+    del: id => tx('readwrite', st=>st.delete(id)),
+    clear: () => tx('readwrite', st=>st.clear()),
+    async trim(){ const a=await this.all(); for(const r of a.slice(HIST_MAX)) await this.del(r.id); },
+  };
+})();
+const histEnabled = () => { try{ return localStorage.getItem('pc.hist')!=='off'; }catch{ return true; } };
+function shownTotal(){ return state.groups.reduce((s,_,i)=>s+groupCount(i),0); }
+function histSnapshot(){   // 지금 화면의 결과(점 좌표 0~1, 종류, 보정값)
+  const W=photo.width||1, H=photo.height||1; const gOf={};
+  state.groups.forEach((g,gi)=>g.forEach(pi=>gOf[pi]=gi));
+  return {
+    ai_total: state.groups.reduce((s,g,gi)=>s+(groupExcluded(gi)?0:groupTotalOf(state,g)),0),
+    shown_total: shownTotal(),
+    groups: state.groups.map((g,gi)=>({ n:groupCount(gi), adjust:state.adjust[gi]||0, excluded:!!groupExcluded(gi), color:describe(gi) })),
+    points: state.pills.map((p,i)=>({ x:+(p.cx/W).toFixed(4), y:+(p.cy/H).toFixed(4), r:+(((p.a||0)+(p.b||0))/2/Math.max(W,H)).toFixed(4), g:gOf[i]??-1, s:p.score!=null?+p.score.toFixed(3):null, fixed:p.fixed||1 })),
+    conf: state.conf ? {conf:+(+state.conf.conf).toFixed(3), n:state.conf.n, agree:state.conf.agree, min:state.conf.min, max:state.conf.max, ml:!!state.conf.ml} : null,
+    mode: state.mode, model: state.conf&&state.conf.ml ? (ML.kind||'ml') : 'rules',
+  };
+}
+async function histOnResult(){
+  const fb=$('fb');
+  $('fb-q').textContent='결과가 맞나요?'; $('fb-ok').hidden=false; $('fb-ng').hidden=false; fb.querySelector('.fb-done')?.remove();
+  state.histId = null;
+  if(state.source==='예시 이미지' || !histEnabled() || !photo.width) return;
+  try{
+    const blob = await new Promise(r=>hiResCanvas().toBlob(r,'image/jpeg',0.88)); if(!blob) return;
+    const id = Date.now()+'-'+Math.random().toString(36).slice(2,6);
+    state.histId = id;
+    await Hist.put({ id, ts:Date.now(), source:state.source||'사진', img:blob, ...histSnapshot(), verdict:null, actual:null });
+    Hist.trim().catch(()=>{});
+  }catch(e){ console.warn('분석 기록 저장 실패', e); }
+}
+async function histVerdict(ok){
+  let actual = shownTotal();
+  if(!ok){
+    const v = prompt('실제 알약 개수를 입력해 주세요', String(actual));
+    if(v==null) return;
+    const n = parseInt(String(v).replace(/[^0-9]/g,''),10); if(!(n>=0)){ alert('숫자를 입력해 주세요'); return; }
+    actual = n;
+  }
+  const fb=$('fb'); $('fb-ok').hidden=true; $('fb-ng').hidden=true;
+  $('fb-q').innerHTML = ok ? '<span class="fb-done">고맙습니다 · 맞음으로 기록</span>' : `<span class="fb-done">실제 ${actual}정으로 기록했습니다</span> · <b>분석 기록 → 보내기</b>로 보내 주시면 학습에 반영합니다`;
+  if(!state.histId){ if(!histEnabled()) $('fb-q').innerHTML += ' (기록이 꺼져 있어 저장되지 않음)'; return; }
+  try{ const rec=await Hist.get(state.histId); if(rec){ Object.assign(rec, histSnapshot(), {verdict: ok?'ok':'wrong', actual}); await Hist.put(rec); } }catch(e){ console.warn(e); }
+}
+$('fb-ok').onclick=()=>histVerdict(true); $('fb-ng').onclick=()=>histVerdict(false);
+// 결과가 나오면 피드백 바 표시
+const _render0 = render;
+render = function(){ _render0(); $('fb').hidden = !(state.pills.length || state.groups.length) || state.source==='예시 이미지' || (typeof live!=='undefined' && live.on && !live.frozen); };
+
+// 기록 시트
+const fmtTime = ts => new Date(ts).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+async function histRender(){
+  const list=$('hist-list'); list.innerHTML=''; let a=[];
+  try{ a=await Hist.all(); }catch(e){ list.innerHTML='<div class="hist-empty">이 기기에서는 기록을 쓸 수 없습니다.</div>'; return; }
+  if(!a.length){ list.innerHTML='<div class="hist-empty">아직 기록이 없습니다. 사진을 분석하면 여기에 쌓입니다.</div>'; }
+  for(const r of a){
+    const it=document.createElement('div'); it.className='hist-item';
+    const url=URL.createObjectURL(r.img); const img=new Image(); img.src=url; img.onload=()=>URL.revokeObjectURL(url); img.alt='';
+    const tag = r.verdict==='ok' ? '<span class="tag ok">맞음</span>' : r.verdict==='wrong' ? '<span class="tag ng">틀림</span>' : '';
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.innerHTML = `${fmtTime(r.ts)} · ${r.source} ${tag}<br>앱 <b>${r.shown_total}</b>정` + (r.actual!=null && r.verdict==='wrong' ? ` → 실제 <b>${r.actual}</b>정` : '');
+    const ng=document.createElement('button'); ng.className='btn'; ng.textContent= r.verdict==='wrong' ? '수정' : '틀림';
+    ng.onclick=async()=>{ const v=prompt('실제 알약 개수', String(r.actual ?? r.shown_total)); if(v==null) return; const n=parseInt(String(v).replace(/[^0-9]/g,''),10); if(!(n>=0)) return; r.actual=n; r.verdict = n===r.shown_total ? 'ok' : 'wrong'; await Hist.put(r); histRender(); };
+    const del=document.createElement('button'); del.className='del'; del.setAttribute('aria-label','삭제'); del.textContent='×';
+    del.onclick=async()=>{ await Hist.del(r.id); histRender(); };
+    it.append(img, meta, ng, del); list.append(it);
+  }
+  $('hist-send-ng').disabled = !a.some(r=>r.verdict==='wrong'); $('hist-send-all').disabled = !a.length;
+}
+$('btn-hist').onclick=()=>{ $('hist-on').checked=histEnabled(); $('hist-status').textContent=''; $('hist').hidden=false; histRender(); };
+$('hist-close').onclick=()=>{ $('hist').hidden=true; };
+$('hist').onclick=e=>{ if(e.target===$('hist')) $('hist').hidden=true; };
+$('hist-on').onchange=e=>{ try{ localStorage.setItem('pc.hist', e.target.checked?'on':'off'); }catch{} };
+$('hist-clear').onclick=async()=>{ if(!confirm('이 기기에 보관된 분석 기록을 모두 지울까요? 되돌릴 수 없습니다.')) return; await Hist.clear(); histRender(); };
+async function histSend(onlyWrong){
+  const st=$('hist-status'); st.textContent='묶는 중…';
+  try{
+    let a=await Hist.all(); if(onlyWrong) a=a.filter(r=>r.verdict==='wrong'); if(!a.length){ st.textContent='보낼 기록이 없습니다.'; return; }
+    const files=[], labels=[];
+    for(const r of a){ const name=`images/${r.id}.jpg`; files.push({name, data:new Uint8Array(await r.img.arrayBuffer())}); const {img, ...rest}=r; labels.push({file:name, time:new Date(r.ts).toISOString(), ...rest}); }
+    files.push({name:'labels.json', data:new TextEncoder().encode(JSON.stringify({app:'알약캡쳐', exported:new Date().toISOString(), ua:navigator.userAgent, items:labels}, null, 1))});
+    files.push({name:'README.txt', data:new TextEncoder().encode('알약캡쳐 분석 기록\nimages/ : 분석한 사진\nlabels.json : 앱이 센 개수(shown_total), 실제 개수(actual), 판정(verdict), 알약 위치(points: x,y 는 사진 너비·높이 대비 0~1)\n')});
+    const zip=makeZip(files); st.textContent='';
+    await shareBlob(new Blob([zip],{type:'application/zip'}), `pillcapture_records_${stamp()}.zip`, '알약캡쳐 분석 기록');
+  }catch(e){ console.error(e); st.textContent='보내기 실패: '+(e&&e.message||e); }
+}
+$('hist-send-ng').onclick=()=>histSend(true); $('hist-send-all').onclick=()=>histSend(false);
+
+// 무압축 ZIP (STORE) — 사진은 이미 JPEG 라 압축 이득이 없음
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc=new TextEncoder(); const parts=[], central=[]; let off=0;
+  const d=new Date(); const dt=((d.getFullYear()-1980)<<25)|((d.getMonth()+1)<<21)|(d.getDate()<<16)|(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  for(const f of files){
+    const nm=enc.encode(f.name), crc=crc32(f.data), sz=f.data.length;
+    const lh=new DataView(new ArrayBuffer(30)); lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true); lh.setUint16(8,0,true); lh.setUint32(10,dt,true); lh.setUint32(14,crc,true); lh.setUint32(18,sz,true); lh.setUint32(22,sz,true); lh.setUint16(26,nm.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer), nm, f.data);
+    const ch=new DataView(new ArrayBuffer(46)); ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0x0800,true); ch.setUint16(10,0,true); ch.setUint32(12,dt,true); ch.setUint32(16,crc,true); ch.setUint32(20,sz,true); ch.setUint32(24,sz,true); ch.setUint16(28,nm.length,true); ch.setUint32(42,off,true);
+    central.push(new Uint8Array(ch.buffer), nm); off += 30+nm.length+sz;
+  }
+  const csz=central.reduce((s,p)=>s+p.length,0);
+  const end=new DataView(new ArrayBuffer(22)); end.setUint32(0,0x06054b50,true); end.setUint16(8,files.length,true); end.setUint16(10,files.length,true); end.setUint32(12,csz,true); end.setUint32(16,off,true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)]);
+}
+// 공유: 앱(안드로이드·iOS)은 Capacitor Filesystem+Share, 웹은 Web Share → 다운로드
+const blobToB64 = b => new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.onerror=()=>rej(fr.error); fr.readAsDataURL(b); });
+async function shareBlob(blob, name, title){
+  const C=window.Capacitor;
+  if(isNativeApp() && C && C.registerPlugin){
+    try{
+      const FS=(C.Plugins&&C.Plugins.Filesystem)||C.registerPlugin('Filesystem'), SH=(C.Plugins&&C.Plugins.Share)||C.registerPlugin('Share');
+      const w=await FS.writeFile({path:name, data:await blobToB64(blob), directory:'CACHE'});
+      await SH.share({title, dialogTitle:title, files:[w.uri]});
+      return true;
+    }catch(e){ if(/cancel/i.test(String(e&&e.message||e))) return true; console.warn('앱 공유 실패 → 웹 방식', e); }
+  }
+  const file=new File([blob],name,{type:blob.type||'application/octet-stream'});
+  try{ if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){ await navigator.share({files:[file], title}); return true; } }catch(e){ if(e && e.name==='AbortError') return true; console.warn(e); }
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=name; a.target='_blank'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
+  return true;
+}
+
 // 드래그앤드롭(PC)
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault(); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&(f.type.startsWith('image/')||f.type.startsWith('video/'))) loadFile(f);});
 // 테스트 훅
 mlInit();
-window.__pill = { state, analyze, analyzeML, mlRun, ML, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
+window.__pill = { Hist, histVerdict, histSend, makeZip, state, analyze, analyzeML, mlRun, ML, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
 
 loadSample();
 })();
