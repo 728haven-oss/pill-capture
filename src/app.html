@@ -136,6 +136,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
 .fb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink-2)}
 .fb .btn{padding:6px 12px}
 .fb .fb-done{color:var(--accent);font-weight:600}
+.fb .fb-send{padding:6px 12px}
+.tag.sent{background:#e7f0ff;color:#2457c5}
 .hist-list{display:flex;flex-direction:column;gap:8px;margin:10px 0 12px;max-height:46vh;overflow:auto}
 .hist-item{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:6px;font-size:13px}
 .hist-item img{width:56px;height:56px;object-fit:cover;border-radius:8px;flex:none;background:var(--line)}
@@ -203,18 +205,18 @@ header{display:flex;align-items:center;justify-content:space-between;padding-blo
     <button class="btn" id="btn-hist">분석 기록</button>
   </div>
 
-  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>AI 검출</b>: 실사진으로 학습한 신경망이 알약마다 점 하나씩 찾아 셉니다(모델은 앱 안에 들어 있고 사진은 기기 밖으로 나가지 않습니다). 흰 유리 트레이처럼 학습에 없던 장면은 아직 틀릴 수 있으니, 결과가 이상하면 <b>원본 사진 공유</b>로 보내 주시면 학습에 반영합니다. 학습 데이터: Pill-Counter(TetraHikari), CountingPills·Pill Detection(Roboflow Universe, CC BY 4.0). <b>촬영</b>은 한 번에 3장을 연속으로 찍어 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 어디에도 자동 전송되지 않습니다. 분석한 사진은 <b>분석 기록</b>에 이 기기 안에만 최근 50장까지 보관되며(끌 수 있음), 결과가 틀렸다면 <b>틀렸어요</b>를 눌러 실제 개수를 적고 <b>분석 기록 → 보내기</b>로 보내 주세요.</p>
+  <p class="note"><b>정확도 안내</b> · 알약을 서로 겹치지 않게 펼치고, 배경은 단색(흰 종이·조제 트레이)으로, 그림자가 적은 조명에서 위에서 수직으로 촬영하면 가장 잘 인식됩니다. 겹친 알약은 크기로 추정하므로 숫자를 눌러 보정하세요. <b>AI 검출</b>: 실사진으로 학습한 신경망이 알약마다 점 하나씩 찾아 셉니다(모델은 앱 안에 들어 있고 사진은 기기 밖으로 나가지 않습니다). 흰 유리 트레이처럼 학습에 없던 장면은 아직 틀릴 수 있으니, 결과가 이상하면 <b>틀렸어요</b>를 눌러 실제 개수를 적고 <b>사진 보내기</b>를 눌러 주세요. 학습에 반영합니다. 학습 데이터: Pill-Counter(TetraHikari), CountingPills·Pill Detection(Roboflow Universe, CC BY 4.0). <b>촬영</b>은 한 번에 3장을 연속으로 찍어 가장 많이 나온 개수를 보여주며, 결과가 흩어지면 신뢰도를 낮게 표시합니다. <b>실시간</b> 모드에서는 카메라를 비추는 동안 계속 세며, <b>이 장면 고정</b>을 누르면 그 장면으로 보정·합치기를 할 수 있습니다. 동영상 파일은 <b>사진 선택</b>에서 고를 수 있습니다. 분석은 기기 안에서만 이루어지며 사진은 자동으로 전송되지 않습니다. <b>사진 보내기</b>를 직접 누른 경우에만 그 사진과 개수가 개발자에게 전송됩니다. 분석한 사진은 <b>분석 기록</b>에 이 기기 안에만 최근 50장까지 보관됩니다(끌 수 있음).</p>
 </div>
 
 <div class="paywall" id="hist" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hist-title">
     <button class="close" id="hist-close" aria-label="닫기">×</button>
     <h2 id="hist-title">분석 기록</h2>
-    <p class="lead">최근 분석한 사진이 <b>이 기기 안에만</b> 최대 50장까지 보관됩니다. 자동으로 전송되지 않으며, 아래 <b>보내기</b>를 누를 때만 직접 고른 앱(카톡·메일 등)으로 공유됩니다. 틀린 결과를 보내 주시면 인식 정확도를 높이는 데 사용합니다.</p>
+    <p class="lead">최근 분석한 사진이 <b>이 기기 안에만</b> 최대 50장까지 보관됩니다. 자동으로 전송되지 않으며, <b>틀린 결과 보내기</b>를 누를 때만 사진·개수가 개발자에게 전송되어 인식 정확도를 높이는 데 쓰입니다. 이름·연락처 등 개인 정보는 보내지 않습니다.</p>
     <div class="hist-list" id="hist-list"></div>
     <div class="cta">
-      <button class="btn primary" id="hist-send-ng">틀린 결과만 보내기</button>
-      <button class="btn" id="hist-send-all">모두 보내기</button>
+      <button class="btn primary" id="hist-send-ng">틀린 결과 보내기</button>
+      <button class="btn" id="hist-send-all">파일로 내보내기</button>
       <button class="btn ghost" id="hist-clear">기록 모두 지우기</button>
     </div>
     <label class="hist-opt"><input type="checkbox" id="hist-on" checked> 분석한 사진을 이 기기에 기록</label>
@@ -1567,9 +1569,38 @@ async function histVerdict(ok){
     actual = n;
   }
   const fb=$('fb'); $('fb-ok').hidden=true; $('fb-ng').hidden=true;
-  $('fb-q').innerHTML = ok ? '<span class="fb-done">고맙습니다 · 맞음으로 기록</span>' : `<span class="fb-done">실제 ${actual}정으로 기록했습니다</span> · <b>분석 기록 → 보내기</b>로 보내 주시면 학습에 반영합니다`;
-  if(!state.histId){ if(!histEnabled()) $('fb-q').innerHTML += ' (기록이 꺼져 있어 저장되지 않음)'; return; }
+  if(ok){ $('fb-q').innerHTML='<span class="fb-done">고맙습니다 · 맞음으로 기록</span>'; }
+  else{
+    $('fb-q').innerHTML = `<span class="fb-done">실제 ${actual}정으로 기록</span> · 이 사진을 보내 주시면 정확도 개선에 바로 반영합니다 <button class="btn primary fb-send" id="fb-send">사진 보내기</button>`;
+    const snap = {...histSnapshot(), verdict:'wrong', actual};
+    $('fb-send').onclick = async()=>{
+      const b=$('fb-send'); b.disabled=true; b.textContent='보내는 중…';
+      try{
+        let rec = state.histId ? await Hist.get(state.histId).catch(()=>null) : null;
+        if(!rec){ const img=await new Promise(r=>hiResCanvas().toBlob(r,'image/jpeg',0.88)); rec={id:Date.now()+'-'+Math.random().toString(36).slice(2,6), ts:Date.now(), source:state.source||'사진', img, ...snap}; }
+        await uploadRec(rec);
+        if(state.histId){ rec.sent=Date.now(); await Hist.put(rec).catch(()=>{}); }
+        $('fb-q').innerHTML='<span class="fb-done">보냈습니다. 고맙습니다!</span> 학습에 반영하겠습니다';
+      }catch(e){ console.warn(e); b.disabled=false; b.textContent='다시 보내기'; $('fb-q').querySelector('.fb-err')?.remove(); b.insertAdjacentHTML('beforebegin','<span class="fb-err" style="color:#c0392b">전송 실패(인터넷 확인) </span>'); }
+    };
+  }
+  if(!state.histId) return;
   try{ const rec=await Hist.get(state.histId); if(rec){ Object.assign(rec, histSnapshot(), {verdict: ok?'ok':'wrong', actual}); await Hist.put(rec); } }catch(e){ console.warn(e); }
+}
+// 업로드 서버 (Google Apps Script 웹 앱) — 사용자가 보내기를 누를 때만 호출
+const UPLOAD_URL = 'https://script.google.com/macros/s/AKfycbye8Dxy_tysQbjDYb1eAzzWkv9xO5wWUZedNjBe-IVJNrHogAjlWzJjHHKiYIwb0K6M/exec';
+const UPLOAD_KEY = 'pcu_d392ddf5e913c523';
+async function uploadRec(rec){
+  const {img, ...meta} = rec;
+  meta.ua = navigator.userAgent; meta.platform = isNativeApp() ? ((window.Capacitor&&Capacitor.getPlatform&&Capacitor.getPlatform())||'app') : 'web';
+  const body = JSON.stringify({k:UPLOAD_KEY, meta, img: await blobToB64(img)});
+  const ctl = new AbortController(); const to=setTimeout(()=>ctl.abort(), 60000);
+  try{
+    const r = await fetch(UPLOAD_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body, redirect:'follow', signal:ctl.signal});
+    const j = await r.json().catch(()=>({ok:r.ok}));
+    if(!j.ok) throw new Error(j.err||('HTTP '+r.status));
+    return true;
+  } finally { clearTimeout(to); }
 }
 $('fb-ok').onclick=()=>histVerdict(true); $('fb-ng').onclick=()=>histVerdict(false);
 // 결과가 나오면 피드백 바 표시
@@ -1585,7 +1616,7 @@ async function histRender(){
   for(const r of a){
     const it=document.createElement('div'); it.className='hist-item';
     const url=URL.createObjectURL(r.img); const img=new Image(); img.src=url; img.onload=()=>URL.revokeObjectURL(url); img.alt='';
-    const tag = r.verdict==='ok' ? '<span class="tag ok">맞음</span>' : r.verdict==='wrong' ? '<span class="tag ng">틀림</span>' : '';
+    const tag = (r.verdict==='ok' ? '<span class="tag ok">맞음</span>' : r.verdict==='wrong' ? '<span class="tag ng">틀림</span>' : '') + (r.sent ? ' <span class="tag sent">보냄</span>' : '');
     const meta=document.createElement('div'); meta.className='meta';
     meta.innerHTML = `${fmtTime(r.ts)} · ${r.source} ${tag}<br>앱 <b>${r.shown_total}</b>정` + (r.actual!=null && r.verdict==='wrong' ? ` → 실제 <b>${r.actual}</b>정` : '');
     const ng=document.createElement('button'); ng.className='btn'; ng.textContent= r.verdict==='wrong' ? '수정' : '틀림';
@@ -1594,7 +1625,7 @@ async function histRender(){
     del.onclick=async()=>{ await Hist.del(r.id); histRender(); };
     it.append(img, meta, ng, del); list.append(it);
   }
-  $('hist-send-ng').disabled = !a.some(r=>r.verdict==='wrong'); $('hist-send-all').disabled = !a.length;
+  $('hist-send-ng').disabled = !a.some(r=>r.verdict==='wrong' && !r.sent); $('hist-send-all').disabled = !a.length;
 }
 $('btn-hist').onclick=()=>{ $('hist-on').checked=histEnabled(); $('hist-status').textContent=''; $('hist').hidden=false; histRender(); };
 $('hist-close').onclick=()=>{ $('hist').hidden=true; };
@@ -1613,7 +1644,19 @@ async function histSend(onlyWrong){
     await shareBlob(new Blob([zip],{type:'application/zip'}), `pillcapture_records_${stamp()}.zip`, '알약캡쳐 분석 기록');
   }catch(e){ console.error(e); st.textContent='보내기 실패: '+(e&&e.message||e); }
 }
-$('hist-send-ng').onclick=()=>histSend(true); $('hist-send-all').onclick=()=>histSend(false);
+async function histUpload(){
+  const st=$('hist-status'); const btn=$('hist-send-ng'); btn.disabled=true;
+  let a=[]; try{ a=(await Hist.all()).filter(r=>r.verdict==='wrong' && !r.sent); }catch(e){}
+  if(!a.length){ st.textContent='보낼 틀린 결과가 없습니다.'; return; }
+  let ok=0, fail=0;
+  for(const r of a){
+    st.textContent=`보내는 중… ${ok+fail+1}/${a.length}`;
+    try{ await uploadRec(r); r.sent=Date.now(); await Hist.put(r); ok++; }catch(e){ console.warn(e); fail++; }
+  }
+  st.textContent = fail ? `${ok}건 보냄 · ${fail}건 실패(인터넷 확인 후 다시 눌러 주세요)` : `${ok}건 보냈습니다. 고맙습니다!`;
+  histRender();
+}
+$('hist-send-ng').onclick=()=>histUpload(); $('hist-send-all').onclick=()=>histSend(false);
 
 // 무압축 ZIP (STORE) — 사진은 이미 JPEG 라 압축 이득이 없음
 const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
@@ -1655,7 +1698,7 @@ document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault(); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f&&(f.type.startsWith('image/')||f.type.startsWith('video/'))) loadFile(f);});
 // 테스트 훅
 mlInit();
-window.__pill = { Hist, histVerdict, histSend, makeZip, state, analyze, analyzeML, mlRun, ML, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
+window.__pill = { Hist, histVerdict, histSend, histUpload, uploadRec, makeZip, state, analyze, analyzeML, mlRun, ML, runOnce, pickResult, estCount, setTol:v=>{opt_scTol=v;}, segdbg:v=>{SEGDBG=v;}, loadSample, groupCount, Pro, openPaywall, canAnalyze };
 
 loadSample();
 })();
